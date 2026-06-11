@@ -26,15 +26,29 @@ async def init_db() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-        # Lightweight migration: add new columns to massnahmen if they don't exist (SQLite-safe).
+        # Lightweight migration: add legacy single-attachment columns if missing
         result = await conn.execute(text("PRAGMA table_info(massnahmen)"))
         existing_cols = {row[1] for row in result.fetchall()}
-        new_cols = {
+        legacy_cols = {
             "anhang_dateiname": "TEXT",
             "anhang_pfad": "TEXT",
             "anhang_mimetype": "TEXT",
             "anhang_groesse": "INTEGER",
         }
-        for col, col_type in new_cols.items():
+        for col, col_type in legacy_cols.items():
             if col not in existing_cols:
                 await conn.execute(text(f"ALTER TABLE massnahmen ADD COLUMN {col} {col_type}"))
+
+        # Migrate legacy single-attachment data into the new multi-anhaenge table
+        rows = await conn.execute(text("""
+            SELECT m.id, m.anhang_dateiname, m.anhang_pfad, m.anhang_mimetype, m.anhang_groesse
+            FROM massnahmen m
+            LEFT JOIN anhaenge a ON a.massnahme_id = m.id AND a.pfad = m.anhang_pfad
+            WHERE m.anhang_pfad IS NOT NULL AND a.id IS NULL
+        """))
+        for row in rows.fetchall():
+            mid, name, pfad, mime, size = row
+            await conn.execute(text("""
+                INSERT INTO anhaenge (massnahme_id, dateiname, pfad, mimetype, groesse)
+                VALUES (:mid, :name, :pfad, :mime, :size)
+            """), {"mid": mid, "name": name, "pfad": pfad, "mime": mime, "size": size})

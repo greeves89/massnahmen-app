@@ -5,6 +5,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from ..database import get_session
 from ..deps import get_current_user
@@ -32,7 +33,10 @@ async def dashboard(
     q: str | None = None,
 ):
     result = await session.execute(
-        select(Massnahme).where(Massnahme.user_id == user.id).order_by(desc(Massnahme.angebot_datum), desc(Massnahme.id))
+        select(Massnahme)
+        .where(Massnahme.user_id == user.id)
+        .options(selectinload(Massnahme.anhaenge))
+        .order_by(desc(Massnahme.angebot_datum), desc(Massnahme.id))
     )
     all_massnahmen = list(result.scalars().all())
 

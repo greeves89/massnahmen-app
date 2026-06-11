@@ -64,6 +64,9 @@ class Massnahme(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
     user: Mapped[User] = relationship(back_populates="massnahmen")
+    anhaenge: Mapped[list["Anhang"]] = relationship(
+        back_populates="massnahme", cascade="all, delete-orphan", order_by="Anhang.created_at"
+    )
 
     @property
     def bewertungs_felder(self) -> dict[str, int | None]:
@@ -81,3 +84,41 @@ class Massnahme(Base):
         if not werte:
             return None
         return sum(werte) / len(werte)
+
+
+class Anhang(Base):
+    """Ein Datei-Anhang zu einer Maßnahme (n:1)."""
+
+    __tablename__ = "anhaenge"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    massnahme_id: Mapped[int] = mapped_column(
+        ForeignKey("massnahmen.id", ondelete="CASCADE"), index=True
+    )
+    dateiname: Mapped[str] = mapped_column(String(500))
+    pfad: Mapped[str] = mapped_column(String(1000))
+    mimetype: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    groesse: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    massnahme: Mapped[Massnahme] = relationship(back_populates="anhaenge")
+
+    @property
+    def icon(self) -> str:
+        m = self.mimetype or ""
+        if m.startswith("image/"):
+            return "🖼️"
+        if m == "application/pdf":
+            return "📄"
+        if "message" in m or self.dateiname.lower().endswith((".eml", ".msg")):
+            return "✉️"
+        return "📎"
+
+    @property
+    def groesse_human(self) -> str:
+        if self.groesse is None:
+            return ""
+        kb = self.groesse / 1024
+        if kb >= 1024:
+            return f"{kb / 1024:.1f} MB"
+        return f"{kb:.0f} KB"

@@ -13,7 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_session
 from ..deps import get_current_user
-from ..models import Massnahme, User
+from ..models import Anhang, Massnahme, User
+from sqlalchemy.orm import selectinload
 from ..utils import SMILEY_MAP, current_schuljahr, schuljahr_for_date, smiley_label
 
 UPLOADS_ROOT = Path(os.environ.get("UPLOADS_DIR", "/data/uploads"))
@@ -95,7 +96,7 @@ async def detail(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    massnahme = await _get_owned(session, massnahme_id, user)
+    massnahme = await _get_owned(session, massnahme_id, user, with_anhaenge=True)
     return templates.TemplateResponse(
         request,
         "massnahme_detail.html",
@@ -220,7 +221,9 @@ async def loeschen(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    massnahme = await _get_owned(session, massnahme_id, user)
+    massnahme = await _get_owned(session, massnahme_id, user, with_anhaenge=True)
+    for a in massnahme.anhaenge:
+        _delete_attachment_file(a.pfad)
     if massnahme.anhang_pfad:
         _delete_attachment_file(massnahme.anhang_pfad)
     await session.delete(massnahme)
@@ -234,78 +237,95 @@ async def upload_anhang(
     request: Request,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-    file: UploadFile = File(...),
+    files: list[UploadFile] = File(...),
 ):
     massnahme = await _get_owned(session, massnahme_id, user)
+    files = [f for f in files if f and f.filename]
+    if not files:
+        raise HTTPException(status_code=400, detail="Keine Datei(en) ausgewählt")
 
-    if not file.filename:
-        raise HTTPException(status_code=400, detail="Keine Datei ausgewählt")
-    ext = Path(file.filename).suffix.lower()
-    if ext not in ALLOWED_EXTENSIONS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Dateityp nicht erlaubt. Erlaubt: {', '.join(sorted(ALLOWED_EXTENSIONS))}",
+    errors: list[str] = []
+    for file in files:
+        ext = Path(file.filename).suffix.lower()
+        if ext not in ALLOWED_EXTENSIONS:
+            errors.append(f"{file.filename}: Typ nicht erlaubt")
+            continue
+
+        safe_name = _sanitize_filename(file.filename)
+        target_dir = UPLOADS_ROOT / str(user.id) / str(massnahme.id)
+        target_dir.mkdir(parents=True, exist_ok=True)
+        unique = uuid.uuid4().hex[:8]
+        target_path = target_dir / f"{unique}_{safe_name}"
+
+        written = 0
+        too_large = False
+        with target_path.open("wb") as out:
+            while chunk := await file.read(64 * 1024):
+                written += len(chunk)
+                if written > MAX_UPLOAD_BYTES:
+                    too_large = True
+                    break
+                out.write(chunk)
+        if too_large:
+            target_path.unlink(missing_ok=True)
+            errors.append(f"{file.filename}: zu groß (max 10 MB)")
+            continue
+
+        anhang = Anhang(
+            massnahme_id=massnahme.id,
+            dateiname=safe_name,
+            pfad=str(target_path),
+            mimetype=file.content_type or "application/octet-stream",
+            groesse=written,
         )
+        session.add(anhang)
 
-    safe_name = _sanitize_filename(file.filename)
-    target_dir = UPLOADS_ROOT / str(user.id) / str(massnahme.id)
-    target_dir.mkdir(parents=True, exist_ok=True)
-    unique = uuid.uuid4().hex[:8]
-    target_path = target_dir / f"{unique}_{safe_name}"
-
-    written = 0
-    with target_path.open("wb") as out:
-        while chunk := await file.read(64 * 1024):
-            written += len(chunk)
-            if written > MAX_UPLOAD_BYTES:
-                out.close()
-                target_path.unlink(missing_ok=True)
-                raise HTTPException(status_code=413, detail="Datei zu groß (max 10 MB)")
-            out.write(chunk)
-
-    if massnahme.anhang_pfad:
-        _delete_attachment_file(massnahme.anhang_pfad)
-
-    massnahme.anhang_pfad = str(target_path)
-    massnahme.anhang_dateiname = safe_name
-    massnahme.anhang_mimetype = file.content_type or "application/octet-stream"
-    massnahme.anhang_groesse = written
     await session.commit()
+    if errors:
+        raise HTTPException(status_code=400, detail="; ".join(errors))
     return RedirectResponse(url=f"/massnahmen/{massnahme.id}?saved=1", status_code=303)
 
 
-@router.get("/massnahmen/{massnahme_id}/anhang")
+@router.get("/anhaenge/{anhang_id}")
 async def download_anhang(
-    massnahme_id: int,
+    anhang_id: int,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    massnahme = await _get_owned(session, massnahme_id, user)
-    if not massnahme.anhang_pfad or not os.path.exists(massnahme.anhang_pfad):
-        raise HTTPException(status_code=404, detail="Kein Anhang vorhanden")
+    result = await session.execute(
+        select(Anhang).join(Massnahme).where(
+            Anhang.id == anhang_id, Massnahme.user_id == user.id
+        )
+    )
+    anhang = result.scalar_one_or_none()
+    if not anhang or not os.path.exists(anhang.pfad):
+        raise HTTPException(status_code=404, detail="Anhang nicht gefunden")
     return FileResponse(
-        path=massnahme.anhang_pfad,
-        filename=massnahme.anhang_dateiname or "anhang",
-        media_type=massnahme.anhang_mimetype or "application/octet-stream",
+        path=anhang.pfad,
+        filename=anhang.dateiname,
+        media_type=anhang.mimetype or "application/octet-stream",
     )
 
 
-@router.post("/massnahmen/{massnahme_id}/anhang/loeschen")
+@router.post("/anhaenge/{anhang_id}/loeschen")
 async def delete_anhang(
-    massnahme_id: int,
-    request: Request,
+    anhang_id: int,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    massnahme = await _get_owned(session, massnahme_id, user)
-    if massnahme.anhang_pfad:
-        _delete_attachment_file(massnahme.anhang_pfad)
-    massnahme.anhang_pfad = None
-    massnahme.anhang_dateiname = None
-    massnahme.anhang_mimetype = None
-    massnahme.anhang_groesse = None
+    result = await session.execute(
+        select(Anhang).join(Massnahme).where(
+            Anhang.id == anhang_id, Massnahme.user_id == user.id
+        )
+    )
+    anhang = result.scalar_one_or_none()
+    if not anhang:
+        raise HTTPException(status_code=404, detail="Anhang nicht gefunden")
+    massnahme_id = anhang.massnahme_id
+    _delete_attachment_file(anhang.pfad)
+    await session.delete(anhang)
     await session.commit()
-    return RedirectResponse(url=f"/massnahmen/{massnahme.id}?saved=1", status_code=303)
+    return RedirectResponse(url=f"/massnahmen/{massnahme_id}?saved=1", status_code=303)
 
 
 def _delete_attachment_file(path: str) -> None:
@@ -321,10 +341,11 @@ def _delete_attachment_file(path: str) -> None:
         pass
 
 
-async def _get_owned(session: AsyncSession, massnahme_id: int, user: User) -> Massnahme:
-    result = await session.execute(
-        select(Massnahme).where(Massnahme.id == massnahme_id, Massnahme.user_id == user.id)
-    )
+async def _get_owned(session: AsyncSession, massnahme_id: int, user: User, with_anhaenge: bool = False) -> Massnahme:
+    stmt = select(Massnahme).where(Massnahme.id == massnahme_id, Massnahme.user_id == user.id)
+    if with_anhaenge:
+        stmt = stmt.options(selectinload(Massnahme.anhaenge))
+    result = await session.execute(stmt)
     massnahme = result.scalar_one_or_none()
     if not massnahme:
         raise HTTPException(status_code=404, detail="Maßnahme nicht gefunden")
