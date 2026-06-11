@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -446,45 +446,89 @@ async def bulk_kategorien_vorschlaege(
     )
 
 
+async def _process_one_file(file: UploadFile, user: User, session: AsyncSession, existing_categories: list[str]) -> Massnahme:
+    raw = await file.read(MAX_UPLOAD_BYTES + 1)
+    if len(raw) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail=f"{file.filename}: zu groß (max 10 MB)")
+    if not raw:
+        raise HTTPException(status_code=400, detail=f"{file.filename}: leer")
+
+    extracted = await extract_from_file(file.filename, raw)
+    return await _create_massnahme_from_extraction(file, raw, extracted, user, session, existing_categories)
+
+
 @router.post("/massnahmen/analyse")
 async def analyze_and_create(
     request: Request,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-    file: UploadFile = File(...),
+    files: list[UploadFile] = File(...),
 ):
-    """Akzeptiert eine Datei (PDF/Bild), lässt sie von der KI analysieren,
-    erstellt daraus eine vorausgefüllte Maßnahme + Bewertung und hängt das Original an."""
+    """Akzeptiert eine ODER MEHRERE Dateien (PDF/Bild). Pro Datei wird eine Maßnahme angelegt.
+    Antwortet bei Mehrfach-Upload mit JSON {created: [{id, confidence, angebot}, ...]} für Frontend-Batch.
+    Bei Single-File: Redirect zur Detail-Seite (wie früher)."""
     if not settings.ai_enabled:
         raise HTTPException(status_code=503, detail="KI-Analyse ist nicht aktiviert.")
-    if not file.filename:
+
+    valid_files = []
+    for f in (files or []):
+        if not f or not f.filename:
+            continue
+        ext = Path(f.filename).suffix.lower()
+        if ext not in {".pdf", ".png", ".jpg", ".jpeg", ".webp", ".heic"}:
+            raise HTTPException(status_code=400, detail=f"{f.filename}: Typ nicht unterstützt.")
+        valid_files.append(f)
+
+    if not valid_files:
         raise HTTPException(status_code=400, detail="Keine Datei ausgewählt")
-    ext = Path(file.filename).suffix.lower()
-    if ext not in {".pdf", ".png", ".jpg", ".jpeg", ".webp", ".heic"}:
-        raise HTTPException(
-            status_code=400,
-            detail="Nur PDF und Bilder können analysiert werden (PDF/JPG/PNG/HEIC).",
-        )
 
-    raw = await file.read(MAX_UPLOAD_BYTES + 1)
-    if len(raw) > MAX_UPLOAD_BYTES:
-        raise HTTPException(status_code=413, detail="Datei zu groß (max 10 MB)")
-    if not raw:
-        raise HTTPException(status_code=400, detail="Leere Datei")
-
-    try:
-        extracted = await extract_from_file(file.filename, raw)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"KI-Analyse fehlgeschlagen: {e}")
-
-    # Vereinfachtes Schema: KI liefert nur angebot + bewertung + notizen.
-    # Alle anderen Felder kann Julia danach selber setzen.
+    # Bestehende Kategorien einmal laden (für Fuzzy-Match in allen Dateien)
     cat_rows = await session.execute(
         select(Massnahme.kategorie).where(
             Massnahme.user_id == user.id, Massnahme.kategorie.is_not(None)
         ).distinct()
     )
     existing_categories = sorted({c for (c,) in cat_rows if c})
+
+    created: list[Massnahme] = []
+    errors: list[str] = []
+    for f in valid_files:
+        try:
+            m = await _process_one_file(f, user, session, existing_categories)
+            created.append(m)
+            if m.kategorie and m.kategorie not in existing_categories:
+                existing_categories.append(m.kategorie)
+        except HTTPException as e:
+            errors.append(f"{f.filename}: {e.detail}")
+        except Exception as e:
+            errors.append(f"{f.filename}: {e}")
+
+    if not created:
+        raise HTTPException(status_code=500, detail="Keine Datei konnte verarbeitet werden: " + "; ".join(errors))
+
+    # Single-File → klassischer Redirect
+    if len(valid_files) == 1 and not errors:
+        return RedirectResponse(url=f"/massnahmen/{created[0].id}?ai=1", status_code=303)
+
+    # Multi-File → JSON-Response für Frontend
+    return JSONResponse({
+        "created": [
+            {"id": m.id, "angebot": m.angebot, "confidence": m.confidence}
+            for m in created
+        ],
+        "errors": errors,
+    })
+
+
+async def _create_massnahme_from_extraction(
+    file: UploadFile,
+    raw: bytes,
+    extracted: dict[str, Any],
+    user: User,
+    session: AsyncSession,
+    existing_categories: list[str],
+) -> Massnahme:
+
     angebot_text = (extracted.get("angebot") or "").strip()
     suggested = _match_category(angebot_text, existing_categories)
 
@@ -507,6 +551,7 @@ async def analyze_and_create(
         kenntnis_tutor_datum=None,
         kenntnis_eltern_datum=None,
         notizen=_str_or_none(extracted.get("notizen")),
+        confidence=extracted.get("confidence"),
     )
     bew = extracted.get("bewertung") or {}
     massnahme.bewertung_informativ = _int_in_set(bew.get("informativ"), {-1, 0, 1})
@@ -535,8 +580,7 @@ async def analyze_and_create(
     )
     session.add(anhang)
     await session.commit()
-
-    return RedirectResponse(url=f"/massnahmen/{massnahme.id}?ai=1", status_code=303)
+    return massnahme
 
 
 def _safe_date(value: Any) -> date | None:

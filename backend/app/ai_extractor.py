@@ -281,11 +281,29 @@ def _deterministic_parse(description: str) -> dict[str, Any]:
         if any(w in low for w in ("unsicher", "unleserlich", "schwer lesbar", "wahrscheinlich")):
             notizen_parts.append(line)
 
+    # Confidence-Score (0-100)
+    confidence = 100
+    desc_lower = description.lower()
+    # Pro Erwähnung von Unsicherheit -5 Punkte
+    unsicherheit_marker = ["sieht aus wie", "unsicher", "wahrscheinlich", "könnte", "evtl.", "vermutlich", "schwer lesbar"]
+    for marker in unsicherheit_marker:
+        confidence -= desc_lower.count(marker) * 5
+    # Felder die fehlen → -Punkte
+    if not angebot:
+        confidence -= 30
+    if not angebot_datum:
+        confidence -= 15
+    # Wenn alle Bewertungen null sind → -20
+    if all(v is None for v in bewertung.values()):
+        confidence -= 20
+    confidence = max(0, min(100, confidence))
+
     return {
         "angebot": angebot,
         "angebot_datum": angebot_datum,
         "bewertung": bewertung,
         "notizen": " · ".join(notizen_parts) if notizen_parts else None,
+        "confidence": confidence,
     }
 
 

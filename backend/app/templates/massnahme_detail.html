@@ -7,12 +7,19 @@
     <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>Übersicht
   </a>
   <h1 class="text-2xl font-semibold text-slate-900 mt-2">{{ massnahme.angebot }}</h1>
-  <p class="text-slate-500 mt-1 text-sm">
-    Erfasst {{ massnahme.created_at.strftime('%d.%m.%Y %H:%M') }}
+  <p class="text-slate-500 mt-1 text-sm flex items-center gap-2 flex-wrap">
+    <span>Erfasst {{ massnahme.created_at.strftime('%d.%m.%Y %H:%M') }}</span>
     {% if massnahme.kategorie %}
     · <span class="inline-flex items-center gap-1"><i data-lucide="tag" class="w-3.5 h-3.5"></i>{{ massnahme.kategorie }}</span>
     {% endif %}
-    · Schuljahr {{ massnahme.schuljahr }}
+    · <span>Schuljahr {{ massnahme.schuljahr }}</span>
+    {% if massnahme.confidence is not none %}
+    · <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded
+                   {% if massnahme.confidence >= 80 %}bg-green-50 text-green-700{% else %}bg-amber-50 text-amber-700{% endif %}">
+        <i data-lucide="{% if massnahme.confidence >= 80 %}check-circle-2{% else %}alert-triangle{% endif %}" class="w-3 h-3"></i>
+        KI-Confidence {{ massnahme.confidence }}%
+      </span>
+    {% endif %}
   </p>
 </div>
 
