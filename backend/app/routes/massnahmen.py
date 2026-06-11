@@ -88,11 +88,11 @@ async def neu_submit(
     freistellung_nummer: str = Form(""),
     schuljahr: str = Form(""),
 ):
-    angebot_d = _parse_date(angebot_datum)
-    sj = schuljahr.strip() or (schuljahr_for_date(angebot_d) if angebot_d else current_schuljahr())
+    angebot_d = _parse_date(angebot_datum) or date.today()
+    sj = schuljahr.strip() or schuljahr_for_date(angebot_d)
     massnahme = Massnahme(
         user_id=user.id,
-        schueler_name=schueler_name.strip(),
+        schueler_name=(schueler_name or "—").strip() or "—",
         angebot=angebot.strip(),
         kategorie=kategorie.strip() or None,
         angebot_datum=angebot_d,
@@ -489,14 +489,15 @@ async def analyze_and_create(
     suggested = _match_category(angebot_text, existing_categories)
 
     today = date.today()
+    angebot_d = _safe_date(extracted.get("angebot_datum"))
     massnahme = Massnahme(
         user_id=user.id,
-        schueler_name="—",  # Julia kann manuell setzen
+        schueler_name="—",
         angebot=angebot_text[:500] or "(KI konnte Angebot nicht lesen)",
         kategorie=suggested,
-        angebot_datum=today,  # Default: heute (Julia kann ändern)
+        angebot_datum=angebot_d or today,
         freistellung_nummer=None,
-        schuljahr=current_schuljahr(),
+        schuljahr=schuljahr_for_date(angebot_d or today),
         beurlaubung_status=None,
         beurlaubung_begruendung=None,
         teilnahme_bestaetigt=False,

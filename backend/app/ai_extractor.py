@@ -86,35 +86,31 @@ def file_to_image_payloads(filename: str, data: bytes) -> list[str]:
 # ---------- Pass 1 — Reasoning / Beschreibung ----------
 
 DESCRIBE_PROMPT = """Du betrachtest ein deutsches BSO-Formular (Berufs- und Studienorientierung).
-Ich brauche von dir NUR ZWEI Sachen — sonst nichts:
+Ich brauche nur folgende Infos:
 
-1) WAS IST DAS ANGEBOT / DIE MASSNAHME?
-   Wo steht "(z.B. Vocatium)" auf der Linie davor — was wurde dort eingetragen?
+1) ANGEBOT: Was steht in der Linie nach "für die Teilnahme an folgendem Angebot der
+   Berufs- bzw. Studienorientierung" (vor "(z.B. Vocatium)")?
    Beispiele: "Vocatium Hamburg", "BIZ-Besuch", "Tag der offenen Tür Uni Köln",
-   "Praktikumstag bei Siemens", "Vocatium Potsdam".
-   Wenn Handschrift unklar: schreib "sieht aus wie X" und gib mehrere Lese-Tipps.
-   Wenn komplett unlesbar: schreib "unleserlich".
+   "Praktikumstag bei Siemens".
+   Wenn unklar: "sieht aus wie X". Wenn komplett unlesbar: "unleserlich".
 
-2) WIE LAUTET DIE BEWERTUNG?
-   Es gibt 5 Zeilen in der Rückmeldungs-Tabelle. Die Tabelle hat 3 Spalten von
-   LINKS nach RECHTS:
-   - SPALTE 1 (links) = ☺ positiv (Wert 1)
-   - SPALTE 2 (mitte) = ☻ neutral (Wert 0)
-   - SPALTE 3 (rechts) = ☹ negativ (Wert -1)
+2) DATUM: Welches Datum steht in der "am ___ (Datum)" Linie unter dem Angebot?
+   Format wie es da steht (z.B. "29.09.26" oder "15. März 2026"). Wenn nicht erkennbar: "unbekannt".
 
-   Für JEDE der 5 Zeilen: in welcher Spalte sitzt die Markierung
-   (Kreuz/Kreis/Haken/Strich)? Oder ist die ganze Zeile leer?
+3) BEWERTUNG: In der Rückmeldungs-Tabelle gibt es 5 Zeilen und 3 Spalten:
+   - SPALTE 1 (links) = ☺ positiv
+   - SPALTE 2 (mitte) = ☻ neutral
+   - SPALTE 3 (rechts) = ☹ negativ
+   Für jede Zeile: wo sitzt die Markierung (oder leer)?
 
-   Zeilen-Reihenfolge:
-   a) "informativ und qualitativ gut" → Spalte?
-   b) "persönlich geholfen" → Spalte?
-   c) "gute Orientierung" → Spalte?
-   d) "anderen zu empfehlen" → Spalte?
-   e) "bei Entscheidung geholfen" → Spalte?
-
-Antworte ALS REINER TEXT (kein JSON), kurz und präzise:
-- Erste Zeile: "Angebot: ..." (mit besten Tipps)
-- Danach 5 Zeilen, eine pro Bewertungs-Aussage: "a) links/mitte/rechts/leer", "b) ...", etc."""
+Antworte ALS REINER TEXT, kurz und präzise:
+Angebot: ...
+Datum: ...
+a) links/mitte/rechts/leer
+b) ...
+c) ...
+d) ...
+e) ..."""
 
 
 # ---------- Pass 2 — Strukturierung in JSON ----------
@@ -198,9 +194,53 @@ def _parse_zeile(text: str) -> int | None:
     return None
 
 
+def _parse_date_str(raw: str) -> str | None:
+    """Versuche '29.09.26', '29.09.2026', '15.3.2026', '15. März 2026' → YYYY-MM-DD."""
+    if not raw:
+        return None
+    txt = raw.strip().lower()
+    if any(w in txt for w in ("unbekannt", "unleserlich", "leer")):
+        return None
+
+    months = {
+        "jan": 1, "januar": 1, "feb": 2, "februar": 2, "mär": 3, "maerz": 3, "märz": 3,
+        "apr": 4, "april": 4, "mai": 5, "jun": 6, "juni": 6, "jul": 7, "juli": 7,
+        "aug": 8, "august": 8, "sep": 9, "september": 9, "okt": 10, "oktober": 10,
+        "nov": 11, "november": 11, "dez": 12, "dezember": 12,
+    }
+
+    # Versuche numerisch: 29.09.26 / 29.09.2026 / 29-9-26
+    m = re.search(r"(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{2,4})", txt)
+    if m:
+        d, mo, y = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        if y < 100:
+            y = 2000 + y if y >= 24 else 1900 + y
+        try:
+            from datetime import date
+            return date(y, mo, d).isoformat()
+        except ValueError:
+            pass
+
+    # Textuell: 15. März 2026
+    m = re.search(r"(\d{1,2})\.?\s+([a-zäöüß]+)\s+(\d{4})", txt)
+    if m:
+        d = int(m.group(1))
+        mo_name = m.group(2)[:3]
+        y = int(m.group(3))
+        mo = months.get(m.group(2)) or months.get(mo_name)
+        if mo:
+            try:
+                from datetime import date
+                return date(y, mo, d).isoformat()
+            except ValueError:
+                pass
+    return None
+
+
 def _deterministic_parse(description: str) -> dict[str, Any]:
     """Parse Pass-1-Beschreibung deterministisch (kein LLM, kein Mapping-Fehler)."""
     angebot: str | None = None
+    angebot_datum: str | None = None
     bewertung_keys = ("informativ", "persoenlich", "orientierung", "empfehlung", "entscheidung")
     bewertung: dict[str, int | None] = dict.fromkeys(bewertung_keys, None)
     notizen_parts: list[str] = []
@@ -220,7 +260,13 @@ def _deterministic_parse(description: str) -> dict[str, Any]:
                 angebot = value
             continue
 
-        # Zeilen-Marker a) b) c) d) e)  oder  1) 2) 3) 4) 5)
+        # Datum
+        m = re.match(r"^\s*datum[:\-]\s*(.+)$", line, re.IGNORECASE)
+        if m:
+            angebot_datum = _parse_date_str(m.group(1))
+            continue
+
+        # Zeilen-Marker a) b) c) d) e)
         m = re.match(r"^\s*([a-e1-5])[\.\)]\s+(.+)$", line, re.IGNORECASE)
         if m:
             idx_char = m.group(1).lower()
@@ -237,6 +283,7 @@ def _deterministic_parse(description: str) -> dict[str, Any]:
 
     return {
         "angebot": angebot,
+        "angebot_datum": angebot_datum,
         "bewertung": bewertung,
         "notizen": " · ".join(notizen_parts) if notizen_parts else None,
     }

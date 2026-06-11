@@ -186,45 +186,30 @@
     <table class="w-full">
       <thead>
         <tr class="text-left text-xs text-slate-500 uppercase tracking-wider border-b border-slate-200">
-          <th class="px-4 py-2 font-medium">Schüler/in</th>
-          <th class="px-4 py-2 font-medium">Angebot</th>
+          <th class="px-4 py-2 font-medium">Erfasst</th>
           <th class="px-4 py-2 font-medium">Datum</th>
-          <th class="px-4 py-2 font-medium">Status</th>
+          <th class="px-4 py-2 font-medium">Angebot</th>
+          <th class="px-4 py-2 font-medium">Kategorie</th>
           <th class="px-4 py-2 font-medium text-center">Ø</th>
+          <th class="px-4 py-2 font-medium text-center">Dok.</th>
         </tr>
       </thead>
       <tbody class="divide-y divide-slate-100">
         {% for m in s.massnahmen %}
         <tr class="hover:bg-slate-50 cursor-pointer" onclick="window.location='/massnahmen/{{ m.id }}'">
-          <td class="px-4 py-3 font-medium text-slate-900">{{ m.schueler_name }}</td>
-          <td class="px-4 py-3 text-slate-700">
-            {{ m.angebot }}
-            {% if m.kategorie %}
-            <span class="text-xs bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded ml-1 inline-flex items-center gap-1">
-              <i data-lucide="tag" class="w-3 h-3"></i>{{ m.kategorie }}
-            </span>
-            {% endif %}
-            {% if m.freistellung_nummer %}<span class="text-xs text-slate-400 ml-1">· {{ m.freistellung_nummer }}. Freist.</span>{% endif %}
+          <td class="px-4 py-3 text-slate-500 text-xs whitespace-nowrap">
+            {{ m.created_at.strftime('%d.%m.%Y') }}
           </td>
-          <td class="px-4 py-3 text-slate-600 text-sm">
+          <td class="px-4 py-3 text-slate-600 text-sm whitespace-nowrap">
             {% if m.angebot_datum %}{{ m.angebot_datum.strftime('%d.%m.%Y') }}{% else %}—{% endif %}
           </td>
-          <td class="px-4 py-3 text-xs">
-            <div class="flex items-center gap-1.5 flex-wrap">
-            {% if m.beurlaubung_status == "erteilt" %}
-              <span class="bg-green-50 text-green-700 px-2 py-0.5 rounded">Beurlaubt</span>
-            {% elif m.beurlaubung_status == "nicht_erteilt" %}
-              <span class="bg-red-50 text-red-700 px-2 py-0.5 rounded">Abgelehnt</span>
-            {% endif %}
-            {% if m.teilnahme_bestaetigt %}
-              <span class="bg-blue-50 text-blue-700 px-2 py-0.5 rounded">Teilgenommen</span>
-            {% endif %}
-            {% if m.anhaenge %}
-              <span title="{{ m.anhaenge|length }} Anhang/Anhänge" class="text-slate-500 inline-flex items-center gap-0.5">
-                <i data-lucide="paperclip" class="w-3 h-3"></i>{% if m.anhaenge|length > 1 %}{{ m.anhaenge|length }}{% endif %}
-              </span>
-            {% endif %}
-            </div>
+          <td class="px-4 py-3 font-medium text-slate-900">{{ m.angebot }}</td>
+          <td class="px-4 py-3 text-sm">
+            {% if m.kategorie %}
+            <span class="text-xs bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded inline-flex items-center gap-1">
+              <i data-lucide="tag" class="w-3 h-3"></i>{{ m.kategorie }}
+            </span>
+            {% else %}<span class="text-slate-300 text-xs">—</span>{% endif %}
           </td>
           <td class="px-4 py-3 text-center">
             {% set avg = m.bewertung_average %}
@@ -233,6 +218,13 @@
             {% elif avg <= -0.34 %}<i data-lucide="frown" class="w-5 h-5 mx-auto icon-neg"></i>
             {% else %}<i data-lucide="meh" class="w-5 h-5 mx-auto icon-neu"></i>
             {% endif %}
+          </td>
+          <td class="px-4 py-3 text-center">
+            {% if m.anhaenge %}
+              <span class="text-slate-500 inline-flex items-center gap-0.5" title="{{ m.anhaenge|length }} Dokument(e)">
+                <i data-lucide="paperclip" class="w-4 h-4"></i>{% if m.anhaenge|length > 1 %}<span class="text-xs">{{ m.anhaenge|length }}</span>{% endif %}
+              </span>
+            {% else %}<span class="text-slate-300">—</span>{% endif %}
           </td>
         </tr>
         {% endfor %}

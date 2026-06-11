@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ massnahme.schueler_name }} · {{ massnahme.angebot }}{% endblock %}
+{% block title %}{{ massnahme.angebot }}{% endblock %}
 {% block content %}
 
 <div class="mb-6">
@@ -7,16 +7,22 @@
     <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>Übersicht
   </a>
   <h1 class="text-2xl font-semibold text-slate-900 mt-2">{{ massnahme.angebot }}</h1>
-  <p class="text-slate-500 mt-1">{{ massnahme.schueler_name }} · Schuljahr {{ massnahme.schuljahr }}</p>
+  <p class="text-slate-500 mt-1 text-sm">
+    Erfasst {{ massnahme.created_at.strftime('%d.%m.%Y %H:%M') }}
+    {% if massnahme.kategorie %}
+    · <span class="inline-flex items-center gap-1"><i data-lucide="tag" class="w-3.5 h-3.5"></i>{{ massnahme.kategorie }}</span>
+    {% endif %}
+    · Schuljahr {{ massnahme.schuljahr }}
+  </p>
 </div>
 
 <div id="ai-banner" class="hidden mb-4 bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-xl p-4 flex items-start gap-3">
   <i data-lucide="sparkles" class="w-7 h-7 text-purple-500 flex-shrink-0"></i>
   <div class="flex-1 text-sm">
     <div class="font-semibold text-slate-900">Aus deinem Formular extrahiert</div>
-    <div class="text-slate-600 mt-0.5">Bitte alle Felder kurz prüfen — vor allem Datumsangaben und die Bewertung — und ggf. korrigieren. Das Original-Dokument ist als Anhang gespeichert.</div>
+    <div class="text-slate-600 mt-0.5">Bitte Angebot, Datum &amp; Bewertung kurz prüfen — die KI kann sich irren. Das Original-Dokument ist als Anhang gespeichert.</div>
   </div>
-  <button onclick="document.getElementById('ai-banner').remove()" class="text-slate-400 hover:text-slate-900" title="Banner schließen">
+  <button onclick="document.getElementById('ai-banner').remove()" class="text-slate-400 hover:text-slate-900">
     <i data-lucide="x" class="w-4 h-4"></i>
   </button>
 </div>
@@ -27,217 +33,64 @@
   }
 </script>
 
-{# ============ Basis-Daten ============ #}
+{# Basis-Daten — nur Wesentliches #}
 <section class="bg-white rounded-xl border border-slate-200 mb-4">
   <header class="px-5 py-3 border-b border-slate-200">
-    <h2 class="font-semibold text-slate-900">1 · Antrag auf Freistellung</h2>
+    <h2 class="font-semibold text-slate-900">Maßnahme</h2>
   </header>
   <form method="post" action="/massnahmen/{{ massnahme.id }}/edit" class="p-5 space-y-4">
-    <div class="grid grid-cols-2 gap-4">
-      <div>
-        <label class="block text-sm font-medium text-slate-700 mb-1">Schüler/in</label>
-        <input type="text" name="schueler_name" required value="{{ massnahme.schueler_name }}"
-               class="w-full px-3 py-2 border border-slate-300 rounded-md outline-none focus:ring-2 focus:ring-slate-900">
-      </div>
-      <div>
-        <label class="block text-sm font-medium text-slate-700 mb-1">Schuljahr</label>
-        <input type="text" name="schuljahr" value="{{ massnahme.schuljahr }}"
-               class="w-full px-3 py-2 border border-slate-300 rounded-md outline-none focus:ring-2 focus:ring-slate-900">
-      </div>
-    </div>
     <div>
       <label class="block text-sm font-medium text-slate-700 mb-1">Angebot</label>
       <input type="text" name="angebot" required value="{{ massnahme.angebot }}"
              class="w-full px-3 py-2 border border-slate-300 rounded-md outline-none focus:ring-2 focus:ring-slate-900">
     </div>
-    <div>
-      <label class="block text-sm font-medium text-slate-700 mb-1 inline-flex items-center gap-1">
-        <i data-lucide="tag" class="w-3.5 h-3.5"></i>Kategorie
-      </label>
-      <input type="text" name="kategorie" value="{{ massnahme.kategorie or '' }}" list="kategorien-list"
-             placeholder="z.B. Vocatium, BIZ, Tag der offenen Tür"
-             class="w-full px-3 py-2 border border-slate-300 rounded-md outline-none focus:ring-2 focus:ring-slate-900">
-      <datalist id="kategorien-list">
-        {% for k in kategorien %}<option value="{{ k }}">{% endfor %}
-      </datalist>
-      <p class="text-xs text-slate-500 mt-1">Gleichartige Maßnahmen unter eine Kategorie fassen → Trend-Analyse</p>
-    </div>
     <div class="grid grid-cols-2 gap-4">
       <div>
-        <label class="block text-sm font-medium text-slate-700 mb-1">Datum</label>
+        <label class="block text-sm font-medium text-slate-700 mb-1 inline-flex items-center gap-1">
+          <i data-lucide="calendar" class="w-3.5 h-3.5"></i>Ermitteltes Datum
+        </label>
         <input type="date" name="angebot_datum"
                value="{{ massnahme.angebot_datum.isoformat() if massnahme.angebot_datum else '' }}"
                class="w-full px-3 py-2 border border-slate-300 rounded-md outline-none focus:ring-2 focus:ring-slate-900">
       </div>
       <div>
-        <label class="block text-sm font-medium text-slate-700 mb-1">Freistellung</label>
-        <select name="freistellung_nummer"
-                class="w-full px-3 py-2 border border-slate-300 rounded-md outline-none focus:ring-2 focus:ring-slate-900">
-          <option value="" {% if not massnahme.freistellung_nummer %}selected{% endif %}>—</option>
-          {% for n in [1,2,3] %}
-          <option value="{{ n }}" {% if massnahme.freistellung_nummer == n %}selected{% endif %}>{{ n }}. Freistellung</option>
-          {% endfor %}
-        </select>
-      </div>
-    </div>
-    <div>
-      <label class="block text-sm font-medium text-slate-700 mb-1">Notizen</label>
-      <textarea name="notizen" rows="2"
-                class="w-full px-3 py-2 border border-slate-300 rounded-md outline-none focus:ring-2 focus:ring-slate-900">{{ massnahme.notizen or '' }}</textarea>
-    </div>
-    <button type="submit" class="bg-slate-900 text-white px-4 py-1.5 rounded-md text-sm hover:bg-slate-700 transition">
-      Speichern
-    </button>
-  </form>
-</section>
-
-{# ============ Beurlaubung ============ #}
-<section class="bg-white rounded-xl border border-slate-200 mb-4">
-  <header class="px-5 py-3 border-b border-slate-200">
-    <h2 class="font-semibold text-slate-900">2 · Beurlaubungs-Entscheidung</h2>
-  </header>
-  <form method="post" action="/massnahmen/{{ massnahme.id }}/beurlaubung" class="p-5 space-y-4">
-    <div class="flex gap-3">
-      <label class="flex items-center gap-2 cursor-pointer">
-        <input type="radio" name="beurlaubung_status" value=""
-               {% if not massnahme.beurlaubung_status %}checked{% endif %} class="accent-slate-900">
-        <span class="text-sm">Offen</span>
-      </label>
-      <label class="flex items-center gap-2 cursor-pointer">
-        <input type="radio" name="beurlaubung_status" value="erteilt"
-               {% if massnahme.beurlaubung_status == "erteilt" %}checked{% endif %} class="accent-green-600">
-        <span class="text-sm text-green-700 inline-flex items-center gap-1">
-          <i data-lucide="check" class="w-3.5 h-3.5"></i>Erteilt
-        </span>
-      </label>
-      <label class="flex items-center gap-2 cursor-pointer">
-        <input type="radio" name="beurlaubung_status" value="nicht_erteilt"
-               {% if massnahme.beurlaubung_status == "nicht_erteilt" %}checked{% endif %} class="accent-red-600">
-        <span class="text-sm text-red-700 inline-flex items-center gap-1">
-          <i data-lucide="x" class="w-3.5 h-3.5"></i>Nicht erteilt
-        </span>
-      </label>
-    </div>
-    <div>
-      <label class="block text-sm font-medium text-slate-700 mb-1">Begründung (bei Ablehnung)</label>
-      <textarea name="beurlaubung_begruendung" rows="2"
-                class="w-full px-3 py-2 border border-slate-300 rounded-md outline-none focus:ring-2 focus:ring-slate-900">{{ massnahme.beurlaubung_begruendung or '' }}</textarea>
-    </div>
-    <button type="submit" class="bg-slate-900 text-white px-4 py-1.5 rounded-md text-sm hover:bg-slate-700 transition">
-      Speichern
-    </button>
-  </form>
-</section>
-
-{# ============ Teilnahme ============ #}
-<section class="bg-white rounded-xl border border-slate-200 mb-4">
-  <header class="px-5 py-3 border-b border-slate-200">
-    <h2 class="font-semibold text-slate-900">3 · Bestätigung der Teilnahme</h2>
-  </header>
-  <form method="post" action="/massnahmen/{{ massnahme.id }}/teilnahme" class="p-5 space-y-4">
-    <label class="flex items-center gap-2 cursor-pointer">
-      <input type="checkbox" name="teilnahme_bestaetigt"
-             {% if massnahme.teilnahme_bestaetigt %}checked{% endif %} class="accent-slate-900 w-4 h-4">
-      <span class="text-sm font-medium">Teilnahme bestätigt</span>
-    </label>
-    <div class="grid grid-cols-2 gap-4">
-      <div>
-        <label class="block text-sm font-medium text-slate-700 mb-1">Teilnahme-Datum</label>
-        <input type="date" name="teilnahme_datum"
-               value="{{ massnahme.teilnahme_datum.isoformat() if massnahme.teilnahme_datum else '' }}"
+        <label class="block text-sm font-medium text-slate-700 mb-1 inline-flex items-center gap-1">
+          <i data-lucide="tag" class="w-3.5 h-3.5"></i>Kategorie
+        </label>
+        <input type="text" name="kategorie" value="{{ massnahme.kategorie or '' }}" list="kategorien-list"
+               placeholder="z.B. Vocatium"
                class="w-full px-3 py-2 border border-slate-300 rounded-md outline-none focus:ring-2 focus:ring-slate-900">
-      </div>
-      <div>
-        <label class="block text-sm font-medium text-slate-700 mb-1">Institution</label>
-        <input type="text" name="institution_name" value="{{ massnahme.institution_name or '' }}"
-               placeholder="z.B. Agentur für Arbeit, Vocatium-Messe"
-               class="w-full px-3 py-2 border border-slate-300 rounded-md outline-none focus:ring-2 focus:ring-slate-900">
+        <datalist id="kategorien-list">
+          {% for k in kategorien %}<option value="{{ k }}">{% endfor %}
+        </datalist>
       </div>
     </div>
-    <label class="flex items-center gap-2 cursor-pointer text-sm">
-      <input type="checkbox" name="bestaetigung_per_email"
-             {% if massnahme.bestaetigung_per_email %}checked{% endif %} class="accent-slate-900 w-4 h-4">
-      <span>Bestätigung liegt per E-Mail vor</span>
-    </label>
+    <input type="hidden" name="schueler_name" value="{{ massnahme.schueler_name or '—' }}">
+    <input type="hidden" name="schuljahr" value="{{ massnahme.schuljahr }}">
+    <input type="hidden" name="freistellung_nummer" value="">
+    <input type="hidden" name="notizen" value="{{ massnahme.notizen or '' }}">
     <button type="submit" class="bg-slate-900 text-white px-4 py-1.5 rounded-md text-sm hover:bg-slate-700 transition">
       Speichern
     </button>
-  </form>
-</section>
-
-{# ============ Anhänge / Nachweis-Dokumente ============ #}
-<section class="bg-white rounded-xl border-2 border-blue-200 mb-4 shadow-sm">
-  <header class="px-5 py-3 border-b border-blue-200 bg-blue-50 rounded-t-xl flex items-center justify-between">
-    <div>
-      <h2 class="font-semibold text-slate-900 inline-flex items-center gap-2">
-        <i data-lucide="paperclip" class="w-5 h-5 text-blue-600"></i>Dokumente &amp; Nachweise
-      </h2>
-      <p class="text-xs text-slate-500 mt-0.5">Bestätigungs-PDFs, E-Mails, Fotos · mehrere Dateien möglich · max. 10 MB pro Datei</p>
-    </div>
-    <span class="text-xs text-blue-700 bg-blue-100 px-2 py-1 rounded-full">{{ massnahme.anhaenge|length }} Datei{% if massnahme.anhaenge|length != 1 %}en{% endif %}</span>
-  </header>
-
-  <div class="p-5">
-    {% if massnahme.anhaenge %}
-    <div class="space-y-2 mb-4">
-      {% for a in massnahme.anhaenge %}
-      <div class="flex items-center justify-between gap-3 bg-slate-50 border border-slate-200 rounded-lg p-3 hover:bg-slate-100 transition">
-        <a href="/anhaenge/{{ a.id }}" target="_blank" class="flex items-center gap-3 flex-1 min-w-0">
-          <i data-lucide="{{ a.icon }}" class="w-7 h-7 text-slate-600 flex-shrink-0"></i>
-          <div class="flex-1 min-w-0">
-            <div class="text-sm font-medium text-slate-900 truncate">{{ a.dateiname }}</div>
-            <div class="text-xs text-slate-500">
-              {{ a.groesse_human }} · hochgeladen {{ a.created_at.strftime('%d.%m.%Y %H:%M') }}
-            </div>
-          </div>
-          <span class="text-xs text-blue-600 whitespace-nowrap inline-flex items-center gap-0.5">
-            öffnen<i data-lucide="arrow-up-right" class="w-3 h-3"></i>
-          </span>
-        </a>
-        <form method="post" action="/anhaenge/{{ a.id }}/loeschen" class="inline"
-              onsubmit="return confirm('Diese Datei wirklich löschen?');">
-          <button type="submit" class="text-red-500 hover:text-red-700 text-sm px-2" title="Datei löschen">
-            <i data-lucide="trash-2" class="w-4 h-4"></i>
-          </button>
-        </form>
-      </div>
-      {% endfor %}
-    </div>
+    {% if massnahme.notizen %}
+    <p class="text-xs text-slate-500 italic mt-2">KI-Notiz: {{ massnahme.notizen }}</p>
     {% endif %}
-
-    <form method="post" action="/massnahmen/{{ massnahme.id }}/anhang" enctype="multipart/form-data"
-          class="border-2 border-dashed border-blue-300 rounded-lg p-4 bg-blue-50/30">
-      <label class="block text-sm font-medium text-slate-900 mb-2">
-        {% if massnahme.anhaenge %}Weitere Datei{% else %}Erste Datei{% endif %} hochladen
-      </label>
-      <div class="flex flex-col sm:flex-row gap-2">
-        <input type="file" name="files" required multiple
-               accept=".pdf,.jpg,.jpeg,.png,.eml,.msg,.heic,image/*,application/pdf"
-               class="text-sm flex-1 file:mr-3 file:py-2 file:px-4 file:rounded-md file:border-0 file:bg-slate-900 file:text-white file:cursor-pointer file:font-medium hover:file:bg-slate-700">
-        <button type="submit" class="bg-blue-600 text-white px-5 py-2 rounded-md text-sm font-medium hover:bg-blue-700 transition whitespace-nowrap inline-flex items-center gap-1">
-          <i data-lucide="upload" class="w-4 h-4"></i>Hochladen
-        </button>
-      </div>
-      <p class="text-xs text-slate-500 mt-2 inline-flex items-center gap-1">
-        <i data-lucide="lightbulb" class="w-3.5 h-3.5"></i>Tipp: Du kannst mehrere Dateien gleichzeitig auswählen (Strg/Cmd+Klick).
-      </p>
-    </form>
-  </div>
+  </form>
 </section>
 
-{# ============ Rückmeldung / Bewertung (Auto-Save via HTMX) ============ #}
+{# Bewertung #}
 <section class="bg-white rounded-xl border border-slate-200 mb-4">
   <header class="px-5 py-3 border-b border-slate-200">
-    <h2 class="font-semibold text-slate-900">4 · Rückmeldung</h2>
-    <p class="text-xs text-slate-500 mt-0.5">Bewertung des Beratungsangebots — wird automatisch gespeichert</p>
+    <h2 class="font-semibold text-slate-900">Bewertung</h2>
+    <p class="text-xs text-slate-500 mt-0.5">Wird automatisch gespeichert</p>
   </header>
   <div class="p-5 space-y-1">
     {% set rows = [
-      ("informativ", "bewertung_informativ", "Das Beratungsangebot war informativ und qualitativ gut."),
-      ("persoenlich", "bewertung_persoenlich", "Das Beratungsangebot hat mir persönlich geholfen."),
-      ("orientierung", "bewertung_orientierung", "Das Beratungsangebot gab eine gute Orientierung für mich."),
-      ("empfehlung", "bewertung_empfehlung", "Das Beratungsangebot ist auch anderen zu empfehlen."),
-      ("entscheidung", "bewertung_entscheidung", "Das Beratungsangebot hat mir bei einer Entscheidung geholfen.")
+      ("informativ", "bewertung_informativ", "Informativ und qualitativ gut"),
+      ("persoenlich", "bewertung_persoenlich", "Persönlich geholfen"),
+      ("orientierung", "bewertung_orientierung", "Gute Orientierung"),
+      ("empfehlung", "bewertung_empfehlung", "Anderen zu empfehlen"),
+      ("entscheidung", "bewertung_entscheidung", "Bei Entscheidung geholfen")
     ] %}
     {% for feld, attr, label in rows %}
       {% set current = massnahme|attr(attr) %}
@@ -265,38 +118,63 @@
   </div>
 </section>
 
-{# ============ Kenntnisnahme ============ #}
-<section class="bg-white rounded-xl border border-slate-200 mb-4">
-  <header class="px-5 py-3 border-b border-slate-200">
-    <h2 class="font-semibold text-slate-900">5 · Kenntnisnahme</h2>
+{# Anhänge / Dokumente #}
+<section class="bg-white rounded-xl border-2 border-blue-200 mb-4 shadow-sm">
+  <header class="px-5 py-3 border-b border-blue-200 bg-blue-50 rounded-t-xl flex items-center justify-between">
+    <h2 class="font-semibold text-slate-900 inline-flex items-center gap-2">
+      <i data-lucide="paperclip" class="w-5 h-5 text-blue-600"></i>Dokument
+    </h2>
+    <span class="text-xs text-blue-700 bg-blue-100 px-2 py-1 rounded-full">{{ massnahme.anhaenge|length }} Datei{% if massnahme.anhaenge|length != 1 %}en{% endif %}</span>
   </header>
-  <form method="post" action="/massnahmen/{{ massnahme.id }}/kenntnis" class="p-5 space-y-4">
-    <div class="grid grid-cols-2 gap-4">
-      <div>
-        <label class="block text-sm font-medium text-slate-700 mb-1">Tutor / Klassenleitung</label>
-        <input type="date" name="kenntnis_tutor_datum"
-               value="{{ massnahme.kenntnis_tutor_datum.isoformat() if massnahme.kenntnis_tutor_datum else '' }}"
-               class="w-full px-3 py-2 border border-slate-300 rounded-md outline-none focus:ring-2 focus:ring-slate-900">
+  <div class="p-5">
+    {% if massnahme.anhaenge %}
+    <div class="space-y-2 mb-4">
+      {% for a in massnahme.anhaenge %}
+      <div class="flex items-center justify-between gap-3 bg-slate-50 border border-slate-200 rounded-lg p-3 hover:bg-slate-100 transition">
+        <a href="/anhaenge/{{ a.id }}" target="_blank" class="flex items-center gap-3 flex-1 min-w-0">
+          <i data-lucide="{{ a.icon }}" class="w-7 h-7 text-slate-600 flex-shrink-0"></i>
+          <div class="flex-1 min-w-0">
+            <div class="text-sm font-medium text-slate-900 truncate">{{ a.dateiname }}</div>
+            <div class="text-xs text-slate-500">{{ a.groesse_human }} · {{ a.created_at.strftime('%d.%m.%Y %H:%M') }}</div>
+          </div>
+          <span class="text-xs text-blue-600 whitespace-nowrap inline-flex items-center gap-0.5">
+            öffnen<i data-lucide="arrow-up-right" class="w-3 h-3"></i>
+          </span>
+        </a>
+        <form method="post" action="/anhaenge/{{ a.id }}/loeschen" class="inline"
+              onsubmit="return confirm('Datei wirklich löschen?');">
+          <button type="submit" class="text-red-500 hover:text-red-700 px-2" title="Datei löschen">
+            <i data-lucide="trash-2" class="w-4 h-4"></i>
+          </button>
+        </form>
       </div>
-      <div>
-        <label class="block text-sm font-medium text-slate-700 mb-1">Sorgeberechtigte/r</label>
-        <input type="date" name="kenntnis_eltern_datum"
-               value="{{ massnahme.kenntnis_eltern_datum.isoformat() if massnahme.kenntnis_eltern_datum else '' }}"
-               class="w-full px-3 py-2 border border-slate-300 rounded-md outline-none focus:ring-2 focus:ring-slate-900">
-      </div>
+      {% endfor %}
     </div>
-    <button type="submit" class="bg-slate-900 text-white px-4 py-1.5 rounded-md text-sm hover:bg-slate-700 transition">
-      Speichern
-    </button>
-  </form>
+    {% endif %}
+
+    <form method="post" action="/massnahmen/{{ massnahme.id }}/anhang" enctype="multipart/form-data"
+          class="border-2 border-dashed border-blue-300 rounded-lg p-4 bg-blue-50/30">
+      <label class="block text-sm font-medium text-slate-900 mb-2">
+        {% if massnahme.anhaenge %}Weitere Datei{% else %}Datei{% endif %} hochladen
+      </label>
+      <div class="flex flex-col sm:flex-row gap-2">
+        <input type="file" name="files" required multiple
+               accept=".pdf,.jpg,.jpeg,.png,.eml,.msg,.heic,image/*,application/pdf"
+               class="text-sm flex-1 file:mr-3 file:py-2 file:px-4 file:rounded-md file:border-0 file:bg-slate-900 file:text-white file:cursor-pointer file:font-medium hover:file:bg-slate-700">
+        <button type="submit" class="bg-blue-600 text-white px-5 py-2 rounded-md text-sm font-medium hover:bg-blue-700 transition whitespace-nowrap inline-flex items-center gap-1">
+          <i data-lucide="upload" class="w-4 h-4"></i>Hochladen
+        </button>
+      </div>
+    </form>
+  </div>
 </section>
 
-{# ============ Löschen ============ #}
+{# Löschen #}
 <section class="bg-white rounded-xl border border-red-200 mb-4">
   <div class="p-5 flex items-center justify-between">
     <div>
       <h3 class="font-medium text-red-900">Maßnahme löschen</h3>
-      <p class="text-sm text-slate-500 mt-0.5">Unwiderruflich. Statistik wird angepasst.</p>
+      <p class="text-sm text-slate-500 mt-0.5">Unwiderruflich.</p>
     </div>
     <form method="post" action="/massnahmen/{{ massnahme.id }}/loeschen"
           onsubmit="return confirm('Wirklich löschen?');">
