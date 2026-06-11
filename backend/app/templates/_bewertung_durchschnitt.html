@@ -1,19 +1,24 @@
 <div id="bewertung-durchschnitt" class="text-sm text-slate-600 flex items-center gap-2">
   {% if massnahme.bewertung_average is not none %}
     Durchschnitt:
-    <span class="text-xl ml-1">
-      {% if massnahme.bewertung_average >= 0.34 %}😊
-      {% elif massnahme.bewertung_average <= -0.34 %}😞
-      {% else %}😐{% endif %}
-    </span>
+    {% if massnahme.bewertung_average >= 0.34 %}
+      <i data-lucide="smile" class="w-6 h-6 icon-pos"></i>
+    {% elif massnahme.bewertung_average <= -0.34 %}
+      <i data-lucide="frown" class="w-6 h-6 icon-neg"></i>
+    {% else %}
+      <i data-lucide="meh" class="w-6 h-6 icon-neu"></i>
+    {% endif %}
     <span class="text-slate-400 font-mono">({{ "%.2f"|format(massnahme.bewertung_average) }})</span>
   {% else %}
     <span class="text-slate-400 text-xs italic">Noch keine Bewertung</span>
   {% endif %}
-  <span id="bewertung-saved" class="text-xs text-green-600 ml-2 opacity-0 transition-opacity duration-300">✓ gespeichert</span>
+  <span id="bewertung-saved" class="text-xs text-green-600 ml-2 opacity-0 transition-opacity duration-300 inline-flex items-center gap-1">
+    <i data-lucide="check" class="w-3 h-3"></i>gespeichert
+  </span>
 </div>
 <script>
   (function() {
+    if (window.lucide) lucide.createIcons({ root: document.getElementById('bewertung-durchschnitt') });
     const el = document.getElementById('bewertung-saved');
     if (!el) return;
     el.style.opacity = '1';

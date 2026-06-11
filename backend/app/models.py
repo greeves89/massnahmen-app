@@ -106,14 +106,15 @@ class Anhang(Base):
 
     @property
     def icon(self) -> str:
+        """Lucide-Icon-Name passend zum Mimetype."""
         m = self.mimetype or ""
         if m.startswith("image/"):
-            return "🖼️"
+            return "image"
         if m == "application/pdf":
-            return "📄"
+            return "file-text"
         if "message" in m or self.dateiname.lower().endswith((".eml", ".msg")):
-            return "✉️"
-        return "📎"
+            return "mail"
+        return "paperclip"
 
     @property
     def groesse_human(self) -> str:

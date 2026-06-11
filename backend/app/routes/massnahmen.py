@@ -198,6 +198,29 @@ VALID_BEWERTUNGS_FIELDS = {
 }
 
 
+@router.post("/massnahmen/{massnahme_id}/kategorie", response_class=HTMLResponse)
+async def set_kategorie_single(
+    massnahme_id: int,
+    request: Request,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+    kategorie: str = Form(""),
+):
+    """HTMX-Endpoint: speichert nur die Kategorie und liefert den Badge zurück."""
+    massnahme = await _get_owned(session, massnahme_id, user)
+    massnahme.kategorie = kategorie.strip() or None
+    await session.commit()
+    badge = massnahme.kategorie or ""
+    if badge:
+        html = (
+            f'<span class="text-xs bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded inline-flex items-center gap-1">'
+            f'<i data-lucide="tag" class="w-3 h-3"></i>{badge}</span>'
+        )
+    else:
+        html = '<span class="text-xs text-slate-400">—</span>'
+    return HTMLResponse(html)
+
+
 @router.post("/massnahmen/{massnahme_id}/bewertung/{feld}", response_class=HTMLResponse)
 async def set_bewertung_single(
     massnahme_id: int,
@@ -349,6 +372,78 @@ async def delete_anhang(
     await session.delete(anhang)
     await session.commit()
     return RedirectResponse(url=f"/massnahmen/{massnahme_id}?saved=1", status_code=303)
+
+
+@router.get("/bulk-kategorien", response_class=HTMLResponse)
+async def bulk_kategorien_view(
+    request: Request,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+    only_ohne: str = "",
+):
+    """Bulk-Edit: alle Maßnahmen mit Inline-Kategorie-Input + Vorschlag-Button."""
+    stmt = select(Massnahme).where(Massnahme.user_id == user.id)
+    if only_ohne == "1":
+        stmt = stmt.where(Massnahme.kategorie.is_(None))
+    stmt = stmt.order_by(desc(Massnahme.schuljahr), desc(Massnahme.angebot_datum))
+    result = await session.execute(stmt)
+    massnahmen = result.scalars().all()
+
+    cat_rows = await session.execute(
+        select(Massnahme.kategorie).where(
+            Massnahme.user_id == user.id, Massnahme.kategorie.is_not(None)
+        ).distinct()
+    )
+    kategorien = sorted({c for (c,) in cat_rows if c})
+    ohne_count = sum(1 for m in massnahmen if not m.kategorie) if only_ohne != "1" else len(massnahmen)
+
+    return templates.TemplateResponse(
+        request,
+        "bulk_kategorien.html",
+        {
+            "user": user,
+            "massnahmen": massnahmen,
+            "kategorien": kategorien,
+            "only_ohne": only_ohne == "1",
+            "ohne_count": ohne_count,
+            "total": len(massnahmen),
+        },
+    )
+
+
+@router.post("/bulk-kategorien/vorschlaege")
+async def bulk_kategorien_vorschlaege(
+    request: Request,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Wendet _match_category() auf alle Maßnahmen ohne Kategorie an."""
+    cat_rows = await session.execute(
+        select(Massnahme.kategorie).where(
+            Massnahme.user_id == user.id, Massnahme.kategorie.is_not(None)
+        ).distinct()
+    )
+    existing = sorted({c for (c,) in cat_rows if c})
+    if not existing:
+        return RedirectResponse(
+            url="/bulk-kategorien?keine_kategorien=1", status_code=303
+        )
+    result = await session.execute(
+        select(Massnahme).where(
+            Massnahme.user_id == user.id, Massnahme.kategorie.is_(None)
+        )
+    )
+    leer = result.scalars().all()
+    n_set = 0
+    for m in leer:
+        match = _match_category(m.angebot or "", existing)
+        if match:
+            m.kategorie = match
+            n_set += 1
+    await session.commit()
+    return RedirectResponse(
+        url=f"/bulk-kategorien?vorschlaege={n_set}", status_code=303
+    )
 
 
 @router.post("/massnahmen/analyse")
