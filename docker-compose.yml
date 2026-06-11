@@ -11,6 +11,7 @@ services:
       INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL:-admin@example.com}
       INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:?Set INITIAL_ADMIN_PASSWORD in .env}
       INITIAL_ADMIN_NAME: ${INITIAL_ADMIN_NAME:-Admin}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
     volumes:
       - massnahmen-data:/data
 

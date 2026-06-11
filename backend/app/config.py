@@ -14,6 +14,7 @@ class Settings(BaseSettings):
 
     session_cookie_name: str = "massnahmen_session"
     session_max_age_seconds: int = 60 * 60 * 24 * 14
+    cookie_secure: bool = False  # set True when running behind HTTPS
 
 
 settings = Settings()

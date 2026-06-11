@@ -42,7 +42,7 @@ app.add_middleware(
     secret_key=settings.secret_key,
     session_cookie=settings.session_cookie_name,
     max_age=settings.session_max_age_seconds,
-    https_only=False,  # set True behind https reverse proxy
+    https_only=settings.cookie_secure,
     same_site="lax",
 )
 
