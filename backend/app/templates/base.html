@@ -36,8 +36,9 @@
         <span>Maßnahmen-Auswertung</span>
       </a>
       <div class="flex items-center gap-3 text-sm">
-        <a href="/massnahmen/neu" class="bg-slate-900 text-white px-3 py-1.5 rounded-md hover:bg-slate-700 transition">+ Neue Maßnahme</a>
-        <span class="text-slate-500 hidden sm:inline">{{ user.name }}</span>
+        <a href="/massnahmen/neu" class="bg-slate-900 text-white px-3 py-1.5 rounded-md hover:bg-slate-700 transition whitespace-nowrap">+ Neue Maßnahme</a>
+        <a href="/einstellungen" class="text-slate-500 hover:text-slate-900 transition hidden sm:inline" title="Einstellungen">⚙</a>
+        <span class="text-slate-500 hidden md:inline">{{ user.name }}</span>
         <form method="post" action="/logout" class="inline">
           <button type="submit" class="text-slate-500 hover:text-slate-900 transition">Logout</button>
         </form>
@@ -48,5 +49,32 @@
   <main class="max-w-5xl mx-auto px-4 py-6">
     {% block content %}{% endblock %}
   </main>
+
+  <div id="toast" class="fixed bottom-6 right-6 bg-slate-900 text-white px-4 py-2 rounded-lg shadow-lg text-sm opacity-0 transition-opacity duration-300 z-50 pointer-events-none">
+    <span id="toast-msg">Gespeichert</span>
+  </div>
+  <script>
+    (function() {
+      const params = new URLSearchParams(window.location.search);
+      const showToast = (msg) => {
+        const el = document.getElementById('toast');
+        document.getElementById('toast-msg').textContent = msg;
+        el.style.opacity = '1';
+        setTimeout(() => { el.style.opacity = '0'; }, 1800);
+      };
+      if (params.has('saved')) {
+        showToast('✓ Gespeichert');
+        params.delete('saved');
+        const url = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
+        window.history.replaceState({}, '', url);
+      }
+      if (params.has('deleted')) {
+        showToast('🗑 Maßnahme gelöscht');
+        params.delete('deleted');
+        const url = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
+        window.history.replaceState({}, '', url);
+      }
+    })();
+  </script>
 </body>
 </html>

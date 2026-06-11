@@ -115,7 +115,7 @@ async def edit_basis(
     massnahme.schuljahr = schuljahr.strip() or massnahme.schuljahr
     massnahme.notizen = notizen.strip() or None
     await session.commit()
-    return RedirectResponse(url=f"/massnahmen/{massnahme.id}", status_code=303)
+    return RedirectResponse(url=f"/massnahmen/{massnahme.id}?saved=1", status_code=303)
 
 
 @router.post("/massnahmen/{massnahme_id}/beurlaubung")
@@ -131,7 +131,7 @@ async def edit_beurlaubung(
     massnahme.beurlaubung_status = beurlaubung_status.strip() or None
     massnahme.beurlaubung_begruendung = beurlaubung_begruendung.strip() or None
     await session.commit()
-    return RedirectResponse(url=f"/massnahmen/{massnahme.id}", status_code=303)
+    return RedirectResponse(url=f"/massnahmen/{massnahme.id}?saved=1", status_code=303)
 
 
 @router.post("/massnahmen/{massnahme_id}/teilnahme")
@@ -151,29 +151,35 @@ async def edit_teilnahme(
     massnahme.institution_name = institution_name.strip() or None
     massnahme.bestaetigung_per_email = bestaetigung_per_email == "on"
     await session.commit()
-    return RedirectResponse(url=f"/massnahmen/{massnahme.id}", status_code=303)
+    return RedirectResponse(url=f"/massnahmen/{massnahme.id}?saved=1", status_code=303)
 
 
-@router.post("/massnahmen/{massnahme_id}/bewertung")
-async def edit_bewertung(
+VALID_BEWERTUNGS_FIELDS = {
+    "informativ", "persoenlich", "orientierung", "empfehlung", "entscheidung"
+}
+
+
+@router.post("/massnahmen/{massnahme_id}/bewertung/{feld}", response_class=HTMLResponse)
+async def set_bewertung_single(
     massnahme_id: int,
+    feld: str,
     request: Request,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-    bewertung_informativ: str = Form(""),
-    bewertung_persoenlich: str = Form(""),
-    bewertung_orientierung: str = Form(""),
-    bewertung_empfehlung: str = Form(""),
-    bewertung_entscheidung: str = Form(""),
+    wert: str = Form(...),
 ):
+    """HTMX-Endpoint: speichert eine einzelne Bewertung sofort und liefert
+    den aktuellen Durchschnitt als HTML-Fragment zurück."""
+    if feld not in VALID_BEWERTUNGS_FIELDS:
+        raise HTTPException(status_code=400, detail="Ungültiges Bewertungsfeld")
     massnahme = await _get_owned(session, massnahme_id, user)
-    massnahme.bewertung_informativ = _parse_int(bewertung_informativ)
-    massnahme.bewertung_persoenlich = _parse_int(bewertung_persoenlich)
-    massnahme.bewertung_orientierung = _parse_int(bewertung_orientierung)
-    massnahme.bewertung_empfehlung = _parse_int(bewertung_empfehlung)
-    massnahme.bewertung_entscheidung = _parse_int(bewertung_entscheidung)
+    setattr(massnahme, f"bewertung_{feld}", _parse_int(wert))
     await session.commit()
-    return RedirectResponse(url=f"/massnahmen/{massnahme.id}", status_code=303)
+    return templates.TemplateResponse(
+        request,
+        "_bewertung_durchschnitt.html",
+        {"massnahme": massnahme},
+    )
 
 
 @router.post("/massnahmen/{massnahme_id}/kenntnis")
@@ -189,7 +195,7 @@ async def edit_kenntnis(
     massnahme.kenntnis_tutor_datum = _parse_date(kenntnis_tutor_datum)
     massnahme.kenntnis_eltern_datum = _parse_date(kenntnis_eltern_datum)
     await session.commit()
-    return RedirectResponse(url=f"/massnahmen/{massnahme.id}", status_code=303)
+    return RedirectResponse(url=f"/massnahmen/{massnahme.id}?saved=1", status_code=303)
 
 
 @router.post("/massnahmen/{massnahme_id}/loeschen")
@@ -202,7 +208,7 @@ async def loeschen(
     massnahme = await _get_owned(session, massnahme_id, user)
     await session.delete(massnahme)
     await session.commit()
-    return RedirectResponse(url="/", status_code=303)
+    return RedirectResponse(url="/?deleted=1", status_code=303)
 
 
 async def _get_owned(session: AsyncSession, massnahme_id: int, user: User) -> Massnahme:

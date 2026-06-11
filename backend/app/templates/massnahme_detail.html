@@ -130,52 +130,42 @@
   </form>
 </section>
 
-{# ============ Rückmeldung / Smileys ============ #}
+{# ============ Rückmeldung / Smileys (Auto-Save via HTMX) ============ #}
 <section class="bg-white rounded-xl border border-slate-200 mb-4">
   <header class="px-5 py-3 border-b border-slate-200">
     <h2 class="font-semibold text-slate-900">4 · Rückmeldung</h2>
-    <p class="text-xs text-slate-500 mt-0.5">Bewertung des Beratungsangebots</p>
+    <p class="text-xs text-slate-500 mt-0.5">Bewertung des Beratungsangebots — wird automatisch gespeichert</p>
   </header>
-  <form method="post" action="/massnahmen/{{ massnahme.id }}/bewertung" class="p-5 space-y-4">
+  <div class="p-5 space-y-1">
     {% set rows = [
-      ("bewertung_informativ", "Das Beratungsangebot war informativ und qualitativ gut."),
-      ("bewertung_persoenlich", "Das Beratungsangebot hat mir persönlich geholfen."),
-      ("bewertung_orientierung", "Das Beratungsangebot gab eine gute Orientierung für mich."),
-      ("bewertung_empfehlung", "Das Beratungsangebot ist auch anderen zu empfehlen."),
-      ("bewertung_entscheidung", "Das Beratungsangebot hat mir bei einer Entscheidung geholfen.")
+      ("informativ", "bewertung_informativ", "Das Beratungsangebot war informativ und qualitativ gut."),
+      ("persoenlich", "bewertung_persoenlich", "Das Beratungsangebot hat mir persönlich geholfen."),
+      ("orientierung", "bewertung_orientierung", "Das Beratungsangebot gab eine gute Orientierung für mich."),
+      ("empfehlung", "bewertung_empfehlung", "Das Beratungsangebot ist auch anderen zu empfehlen."),
+      ("entscheidung", "bewertung_entscheidung", "Das Beratungsangebot hat mir bei einer Entscheidung geholfen.")
     ] %}
-    {% for field, label in rows %}
-      {% set current = massnahme|attr(field) %}
+    {% for feld, attr, label in rows %}
+      {% set current = massnahme|attr(attr) %}
       <div class="flex items-center justify-between gap-4 py-2 border-b border-slate-100 last:border-0">
         <span class="text-sm text-slate-700 flex-1">{{ label }}</span>
-        <div class="flex gap-2" data-field="{{ field }}">
-          <input type="hidden" name="{{ field }}" id="{{ field }}_input" value="{{ current if current is not none else '' }}">
-          <button type="button" onclick="setBewertung('{{ field }}', 1, this)"
-                  class="smiley-btn {% if current == 1 %}active-pos{% endif %}" title="Positiv">😊</button>
-          <button type="button" onclick="setBewertung('{{ field }}', 0, this)"
-                  class="smiley-btn {% if current == 0 %}active-neu{% endif %}" title="Neutral">😐</button>
-          <button type="button" onclick="setBewertung('{{ field }}', -1, this)"
-                  class="smiley-btn {% if current == -1 %}active-neg{% endif %}" title="Negativ">😞</button>
+        <div class="flex gap-2" data-field="{{ attr }}">
+          {% for val, cls, icon, title in [(1, 'active-pos', '😊', 'Positiv'), (0, 'active-neu', '😐', 'Neutral'), (-1, 'active-neg', '😞', 'Negativ')] %}
+          <button type="button"
+                  hx-post="/massnahmen/{{ massnahme.id }}/bewertung/{{ feld }}"
+                  hx-vals='{"wert": "{{ val }}"}'
+                  hx-target="#bewertung-durchschnitt"
+                  hx-swap="outerHTML"
+                  onclick="markActive(this, '{{ cls }}')"
+                  class="smiley-btn {% if current == val %}{{ cls }}{% endif %}"
+                  title="{{ title }}">{{ icon }}</button>
+          {% endfor %}
         </div>
       </div>
     {% endfor %}
-    <div class="flex items-center justify-between pt-3">
-      <div class="text-sm text-slate-600">
-        {% if massnahme.bewertung_average is not none %}
-          Durchschnitt:
-          <span class="text-xl ml-1">
-            {% if massnahme.bewertung_average >= 0.34 %}😊
-            {% elif massnahme.bewertung_average <= -0.34 %}😞
-            {% else %}😐{% endif %}
-          </span>
-          <span class="text-slate-400 font-mono">({{ "%.2f"|format(massnahme.bewertung_average) }})</span>
-        {% endif %}
-      </div>
-      <button type="submit" class="bg-slate-900 text-white px-4 py-1.5 rounded-md text-sm hover:bg-slate-700 transition">
-        Bewertung speichern
-      </button>
+    <div class="pt-4">
+      {% include "_bewertung_durchschnitt.html" %}
     </div>
-  </form>
+  </div>
 </section>
 
 {# ============ Kenntnisnahme ============ #}
@@ -221,15 +211,12 @@
 </section>
 
 <script>
-function setBewertung(field, value, btn) {
-  document.getElementById(field + '_input').value = value;
+function markActive(btn, cls) {
   const group = btn.parentElement;
   group.querySelectorAll('.smiley-btn').forEach(b => {
     b.classList.remove('active-pos', 'active-neu', 'active-neg');
   });
-  if (value === 1) btn.classList.add('active-pos');
-  else if (value === 0) btn.classList.add('active-neu');
-  else if (value === -1) btn.classList.add('active-neg');
+  btn.classList.add(cls);
 }
 </script>
 {% endblock %}

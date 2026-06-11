@@ -28,11 +28,24 @@ async def dashboard(
     request: Request,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
+    sj: str | None = None,
+    q: str | None = None,
 ):
     result = await session.execute(
         select(Massnahme).where(Massnahme.user_id == user.id).order_by(desc(Massnahme.angebot_datum), desc(Massnahme.id))
     )
-    massnahmen = list(result.scalars().all())
+    all_massnahmen = list(result.scalars().all())
+
+    # Verfügbare Schuljahre für Filter (vor Filter berechnen)
+    available_years = sorted({m.schuljahr for m in all_massnahmen}, reverse=True)
+
+    # Filter anwenden
+    massnahmen = all_massnahmen
+    if sj:
+        massnahmen = [m for m in massnahmen if m.schuljahr == sj]
+    if q:
+        ql = q.lower().strip()
+        massnahmen = [m for m in massnahmen if ql in m.schueler_name.lower() or ql in m.angebot.lower()]
 
     by_year: dict[str, list[Massnahme]] = defaultdict(list)
     for m in massnahmen:
@@ -74,5 +87,9 @@ async def dashboard(
             "smiley_label": smiley_label,
             "bewertungs_fields": BEWERTUNGS_FIELDS,
             "total": len(massnahmen),
+            "total_all": len(all_massnahmen),
+            "available_years": available_years,
+            "filter_sj": sj or "",
+            "filter_q": q or "",
         },
     )

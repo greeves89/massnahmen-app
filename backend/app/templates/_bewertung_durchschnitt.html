@@ -1,0 +1,22 @@
+<div id="bewertung-durchschnitt" class="text-sm text-slate-600 flex items-center gap-2">
+  {% if massnahme.bewertung_average is not none %}
+    Durchschnitt:
+    <span class="text-xl ml-1">
+      {% if massnahme.bewertung_average >= 0.34 %}😊
+      {% elif massnahme.bewertung_average <= -0.34 %}😞
+      {% else %}😐{% endif %}
+    </span>
+    <span class="text-slate-400 font-mono">({{ "%.2f"|format(massnahme.bewertung_average) }})</span>
+  {% else %}
+    <span class="text-slate-400 text-xs italic">Noch keine Bewertung</span>
+  {% endif %}
+  <span id="bewertung-saved" class="text-xs text-green-600 ml-2 opacity-0 transition-opacity duration-300">✓ gespeichert</span>
+</div>
+<script>
+  (function() {
+    const el = document.getElementById('bewertung-saved');
+    if (!el) return;
+    el.style.opacity = '1';
+    setTimeout(() => { el.style.opacity = '0'; }, 1500);
+  })();
+</script>
