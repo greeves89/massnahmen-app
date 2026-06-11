@@ -29,6 +29,7 @@ class Massnahme(Base):
     # Antrag auf Freistellung
     schueler_name: Mapped[str] = mapped_column(String(255))
     angebot: Mapped[str] = mapped_column(String(500))
+    kategorie: Mapped[str | None] = mapped_column(String(200), index=True, nullable=True)
     angebot_datum: Mapped[date | None] = mapped_column(Date, nullable=True)
     freistellung_nummer: Mapped[int | None] = mapped_column(Integer, nullable=True)  # 1, 2, 3
     schuljahr: Mapped[str] = mapped_column(String(9), index=True)  # z.B. "2025/2026"

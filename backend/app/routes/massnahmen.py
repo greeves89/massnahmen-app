@@ -53,7 +53,16 @@ def _parse_int(value: str | None) -> int | None:
 
 
 @router.get("/massnahmen/neu", response_class=HTMLResponse)
-async def neu_form(request: Request, user: User = Depends(get_current_user)):
+async def neu_form(
+    request: Request,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    cats = await session.execute(
+        select(Massnahme.kategorie).where(
+            Massnahme.user_id == user.id, Massnahme.kategorie.is_not(None)
+        ).distinct()
+    )
     return templates.TemplateResponse(
         request,
         "massnahme_form.html",
@@ -62,6 +71,7 @@ async def neu_form(request: Request, user: User = Depends(get_current_user)):
             "user": user,
             "schuljahr_default": current_schuljahr(),
             "today": date.today().isoformat(),
+            "kategorien": sorted({c for (c,) in cats if c}),
         },
     )
 
@@ -73,6 +83,7 @@ async def neu_submit(
     session: AsyncSession = Depends(get_session),
     schueler_name: str = Form(...),
     angebot: str = Form(...),
+    kategorie: str = Form(""),
     angebot_datum: str = Form(""),
     freistellung_nummer: str = Form(""),
     schuljahr: str = Form(""),
@@ -83,6 +94,7 @@ async def neu_submit(
         user_id=user.id,
         schueler_name=schueler_name.strip(),
         angebot=angebot.strip(),
+        kategorie=kategorie.strip() or None,
         angebot_datum=angebot_d,
         freistellung_nummer=_parse_int(freistellung_nummer),
         schuljahr=sj,
@@ -100,6 +112,11 @@ async def detail(
     session: AsyncSession = Depends(get_session),
 ):
     massnahme = await _get_owned(session, massnahme_id, user, with_anhaenge=True)
+    cats = await session.execute(
+        select(Massnahme.kategorie).where(
+            Massnahme.user_id == user.id, Massnahme.kategorie.is_not(None)
+        ).distinct()
+    )
     return templates.TemplateResponse(
         request,
         "massnahme_detail.html",
@@ -109,6 +126,7 @@ async def detail(
             "smiley_map": SMILEY_MAP,
             "smiley_label": smiley_label,
             "today": date.today().isoformat(),
+            "kategorien": sorted({c for (c,) in cats if c}),
         },
     )
 
@@ -121,6 +139,7 @@ async def edit_basis(
     session: AsyncSession = Depends(get_session),
     schueler_name: str = Form(...),
     angebot: str = Form(...),
+    kategorie: str = Form(""),
     angebot_datum: str = Form(""),
     freistellung_nummer: str = Form(""),
     schuljahr: str = Form(""),
@@ -129,6 +148,7 @@ async def edit_basis(
     massnahme = await _get_owned(session, massnahme_id, user)
     massnahme.schueler_name = schueler_name.strip()
     massnahme.angebot = angebot.strip()
+    massnahme.kategorie = kategorie.strip() or None
     massnahme.angebot_datum = _parse_date(angebot_datum)
     massnahme.freistellung_nummer = _parse_int(freistellung_nummer)
     massnahme.schuljahr = schuljahr.strip() or massnahme.schuljahr
@@ -363,10 +383,24 @@ async def analyze_and_create(
         raise HTTPException(status_code=500, detail=f"KI-Analyse fehlgeschlagen: {e}")
 
     angebot_d = _safe_date(extracted.get("angebot_datum"))
+
+    # Existing categories for fuzzy match
+    cat_rows = await session.execute(
+        select(Massnahme.kategorie).where(
+            Massnahme.user_id == user.id, Massnahme.kategorie.is_not(None)
+        ).distinct()
+    )
+    existing_categories = sorted({c for (c,) in cat_rows if c})
+    angebot_text = (extracted.get("angebot") or "").strip()
+    suggested = _match_category(angebot_text, existing_categories) or _str_or_none(
+        extracted.get("kategorie")
+    )
+
     massnahme = Massnahme(
         user_id=user.id,
         schueler_name=(extracted.get("schueler_name") or "(unbekannt)").strip()[:255],
-        angebot=(extracted.get("angebot") or "(unbekannt)").strip()[:500],
+        angebot=angebot_text[:500] or "(unbekannt)",
+        kategorie=suggested,
         angebot_datum=angebot_d,
         freistellung_nummer=_int_in_set(extracted.get("freistellung_nummer"), {1, 2, 3}),
         schuljahr=(
@@ -441,6 +475,28 @@ def _status_or_none(value: Any) -> str | None:
     if value in ("erteilt", "nicht_erteilt"):
         return value
     return None
+
+
+def _match_category(angebot: str, existing: list[str]) -> str | None:
+    """Einfaches Substring/Word-Match gegen bestehende Kategorien."""
+    if not angebot or not existing:
+        return None
+    a_lower = angebot.lower()
+    # Direct substring match
+    for cat in existing:
+        if cat.lower() in a_lower or a_lower in cat.lower():
+            return cat
+    # Token-overlap match
+    tokens = set(re.findall(r"[a-zäöüß]{4,}", a_lower))
+    best = None
+    best_overlap = 0
+    for cat in existing:
+        cat_tokens = set(re.findall(r"[a-zäöüß]{4,}", cat.lower()))
+        ov = len(tokens & cat_tokens)
+        if ov > best_overlap:
+            best_overlap = ov
+            best = cat
+    return best if best_overlap >= 1 else None
 
 
 def _delete_attachment_file(path: str) -> None:

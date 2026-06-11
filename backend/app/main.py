@@ -8,7 +8,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from .config import settings
 from .database import SessionLocal, init_db
 from .models import User
-from .routes import auth, dashboard, massnahmen, settings as settings_routes
+from .routes import analyse, auth, dashboard, massnahmen, settings as settings_routes
 from .security import hash_password
 
 
@@ -52,6 +52,7 @@ app.include_router(auth.router)
 app.include_router(dashboard.router)
 app.include_router(massnahmen.router)
 app.include_router(settings_routes.router)
+app.include_router(analyse.router)
 
 
 @app.get("/healthz")

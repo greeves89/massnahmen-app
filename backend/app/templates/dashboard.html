@@ -184,6 +184,7 @@
           <td class="px-4 py-3 font-medium text-slate-900">{{ m.schueler_name }}</td>
           <td class="px-4 py-3 text-slate-700">
             {{ m.angebot }}
+            {% if m.kategorie %}<span class="text-xs bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded ml-1">📊 {{ m.kategorie }}</span>{% endif %}
             {% if m.freistellung_nummer %}<span class="text-xs text-slate-400 ml-1">· {{ m.freistellung_nummer }}. Freist.</span>{% endif %}
           </td>
           <td class="px-4 py-3 text-slate-600 text-sm">
