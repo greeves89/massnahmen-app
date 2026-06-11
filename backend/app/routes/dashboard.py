@@ -33,6 +33,7 @@ async def dashboard(
     sj: str | None = None,
     q: str | None = None,
     pruefen: int = 0,
+    kat: str | None = None,
 ):
     result = await session.execute(
         select(Massnahme)
@@ -57,6 +58,12 @@ async def dashboard(
     if q:
         ql = q.lower().strip()
         massnahmen = [m for m in massnahmen if ql in m.schueler_name.lower() or ql in m.angebot.lower()]
+    if kat:
+        massnahmen = [m for m in massnahmen if (m.kategorie or "—") == kat]
+
+    # Anzeige-Modus: wenn Filter aktiv (q, pruefen, kat) → Tabelle direkt.
+    # Sonst: pro Schuljahr Kategorie-Kacheln als Drill-Down.
+    show_table_direct = bool(q or pruefen or kat)
 
     by_year: dict[str, list[Massnahme]] = defaultdict(list)
     for m in massnahmen:
@@ -79,6 +86,24 @@ async def dashboard(
             }
         gesamt = [m.bewertung_average for m in items if m.bewertung_average is not None]
         gesamt_avg = sum(gesamt) / len(gesamt) if gesamt else None
+        # Kategorie-Aggregat innerhalb dieses Schuljahres
+        kat_map: dict[str, list[Massnahme]] = defaultdict(list)
+        for it in items:
+            kat_map[it.kategorie or "—"].append(it)
+        kategorien_kacheln = []
+        for kat_name in sorted(kat_map.keys()):
+            kat_items = kat_map[kat_name]
+            avg_vals = [m.bewertung_average for m in kat_items if m.bewertung_average is not None]
+            kat_avg = sum(avg_vals) / len(avg_vals) if avg_vals else None
+            needs_review_count = sum(1 for m in kat_items if m.needs_review)
+            kategorien_kacheln.append({
+                "name": kat_name,
+                "anzahl": len(kat_items),
+                "avg": kat_avg,
+                "smiley": average_smiley(kat_avg),
+                "needs_review": needs_review_count,
+            })
+
         stats.append({
             "schuljahr": sj,
             "anzahl": len(items),
@@ -86,6 +111,7 @@ async def dashboard(
             "gesamt_avg": gesamt_avg,
             "gesamt_smiley": average_smiley(gesamt_avg),
             "massnahmen": items,
+            "kategorien_kacheln": kategorien_kacheln,
         })
 
     return templates.TemplateResponse(
@@ -103,6 +129,8 @@ async def dashboard(
             "filter_sj": sj or "",
             "filter_q": q or "",
             "filter_pruefen": bool(pruefen),
+            "filter_kat": kat or "",
+            "show_table_direct": show_table_direct,
             "review_count": review_count,
             "ai_enabled": settings.ai_enabled,
         },
