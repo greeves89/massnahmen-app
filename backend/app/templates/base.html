@@ -54,27 +54,39 @@
     <span id="toast-msg">Gespeichert</span>
   </div>
   <script>
+    window.showToast = (msg) => {
+      const el = document.getElementById('toast');
+      document.getElementById('toast-msg').textContent = msg;
+      el.style.opacity = '1';
+      clearTimeout(window._toastTimer);
+      window._toastTimer = setTimeout(() => { el.style.opacity = '0'; }, 1800);
+    };
     (function() {
       const params = new URLSearchParams(window.location.search);
-      const showToast = (msg) => {
-        const el = document.getElementById('toast');
-        document.getElementById('toast-msg').textContent = msg;
-        el.style.opacity = '1';
-        setTimeout(() => { el.style.opacity = '0'; }, 1800);
-      };
       if (params.has('saved')) {
-        showToast('✓ Gespeichert');
+        window.showToast('✓ Gespeichert');
         params.delete('saved');
         const url = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
         window.history.replaceState({}, '', url);
       }
       if (params.has('deleted')) {
-        showToast('🗑 Maßnahme gelöscht');
+        window.showToast('🗑 Maßnahme gelöscht');
         params.delete('deleted');
         const url = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
         window.history.replaceState({}, '', url);
       }
     })();
+    document.body.addEventListener('htmx:afterRequest', (evt) => {
+      const xhr = evt.detail && evt.detail.xhr;
+      if (!xhr) return;
+      const status = xhr.status;
+      const url = (evt.detail.requestConfig && evt.detail.requestConfig.path) || '';
+      if (status >= 200 && status < 300 && /\/bewertung\//.test(url)) {
+        window.showToast('✓ Bewertung gespeichert');
+      } else if (status >= 400) {
+        window.showToast('⚠ Speichern fehlgeschlagen');
+      }
+    });
   </script>
 </body>
 </html>
