@@ -4,6 +4,7 @@ import shutil
 import uuid
 from datetime import date, datetime
 from pathlib import Path
+from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
@@ -13,6 +14,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_session
 from ..deps import get_current_user
+from ..ai_extractor import extract_from_file
+from ..config import settings
 from ..models import Anhang, Massnahme, User
 from sqlalchemy.orm import selectinload
 from ..utils import SMILEY_MAP, current_schuljahr, schuljahr_for_date, smiley_label
@@ -326,6 +329,118 @@ async def delete_anhang(
     await session.delete(anhang)
     await session.commit()
     return RedirectResponse(url=f"/massnahmen/{massnahme_id}?saved=1", status_code=303)
+
+
+@router.post("/massnahmen/analyse")
+async def analyze_and_create(
+    request: Request,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+    file: UploadFile = File(...),
+):
+    """Akzeptiert eine Datei (PDF/Bild), lässt sie von der KI analysieren,
+    erstellt daraus eine vorausgefüllte Maßnahme + Bewertung und hängt das Original an."""
+    if not settings.ai_enabled:
+        raise HTTPException(status_code=503, detail="KI-Analyse ist nicht aktiviert.")
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Keine Datei ausgewählt")
+    ext = Path(file.filename).suffix.lower()
+    if ext not in {".pdf", ".png", ".jpg", ".jpeg", ".webp", ".heic"}:
+        raise HTTPException(
+            status_code=400,
+            detail="Nur PDF und Bilder können analysiert werden (PDF/JPG/PNG/HEIC).",
+        )
+
+    raw = await file.read(MAX_UPLOAD_BYTES + 1)
+    if len(raw) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="Datei zu groß (max 10 MB)")
+    if not raw:
+        raise HTTPException(status_code=400, detail="Leere Datei")
+
+    try:
+        extracted = await extract_from_file(file.filename, raw)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"KI-Analyse fehlgeschlagen: {e}")
+
+    angebot_d = _safe_date(extracted.get("angebot_datum"))
+    massnahme = Massnahme(
+        user_id=user.id,
+        schueler_name=(extracted.get("schueler_name") or "(unbekannt)").strip()[:255],
+        angebot=(extracted.get("angebot") or "(unbekannt)").strip()[:500],
+        angebot_datum=angebot_d,
+        freistellung_nummer=_int_in_set(extracted.get("freistellung_nummer"), {1, 2, 3}),
+        schuljahr=(
+            schuljahr_for_date(angebot_d) if angebot_d else current_schuljahr()
+        ),
+        beurlaubung_status=_status_or_none(extracted.get("beurlaubung_status")),
+        beurlaubung_begruendung=_str_or_none(extracted.get("beurlaubung_begruendung")),
+        teilnahme_bestaetigt=bool(extracted.get("teilnahme_bestaetigt")),
+        teilnahme_datum=_safe_date(extracted.get("teilnahme_datum")),
+        institution_name=_str_or_none(extracted.get("institution_name")),
+        bestaetigung_per_email=bool(extracted.get("bestaetigung_per_email")),
+        kenntnis_tutor_datum=_safe_date(extracted.get("kenntnis_tutor_datum")),
+        kenntnis_eltern_datum=_safe_date(extracted.get("kenntnis_eltern_datum")),
+        notizen=_str_or_none(extracted.get("notizen")),
+    )
+    bew = extracted.get("bewertung") or {}
+    massnahme.bewertung_informativ = _int_in_set(bew.get("informativ"), {-1, 0, 1})
+    massnahme.bewertung_persoenlich = _int_in_set(bew.get("persoenlich"), {-1, 0, 1})
+    massnahme.bewertung_orientierung = _int_in_set(bew.get("orientierung"), {-1, 0, 1})
+    massnahme.bewertung_empfehlung = _int_in_set(bew.get("empfehlung"), {-1, 0, 1})
+    massnahme.bewertung_entscheidung = _int_in_set(bew.get("entscheidung"), {-1, 0, 1})
+
+    session.add(massnahme)
+    await session.flush()  # need ID for attachment path
+
+    # Original-Datei als Anhang speichern
+    safe_name = _sanitize_filename(file.filename)
+    target_dir = UPLOADS_ROOT / str(user.id) / str(massnahme.id)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    unique = uuid.uuid4().hex[:8]
+    target_path = target_dir / f"{unique}_{safe_name}"
+    target_path.write_bytes(raw)
+
+    anhang = Anhang(
+        massnahme_id=massnahme.id,
+        dateiname=safe_name,
+        pfad=str(target_path),
+        mimetype=file.content_type or "application/octet-stream",
+        groesse=len(raw),
+    )
+    session.add(anhang)
+    await session.commit()
+
+    return RedirectResponse(url=f"/massnahmen/{massnahme.id}?ai=1", status_code=303)
+
+
+def _safe_date(value: Any) -> date | None:
+    if not value or not isinstance(value, str):
+        return None
+    try:
+        return datetime.strptime(value[:10], "%Y-%m-%d").date()
+    except (ValueError, TypeError):
+        return None
+
+
+def _int_in_set(value: Any, allowed: set[int]) -> int | None:
+    try:
+        v = int(value)
+    except (TypeError, ValueError):
+        return None
+    return v if v in allowed else None
+
+
+def _str_or_none(value: Any) -> str | None:
+    if value is None:
+        return None
+    s = str(value).strip()
+    return s or None
+
+
+def _status_or_none(value: Any) -> str | None:
+    if value in ("erteilt", "nicht_erteilt"):
+        return value
+    return None
 
 
 def _delete_attachment_file(path: str) -> None:

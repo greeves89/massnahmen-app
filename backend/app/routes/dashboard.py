@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from ..database import get_session
+from ..config import settings
 from ..deps import get_current_user
 from ..models import Massnahme, User
 from ..utils import SMILEY_MAP, average_smiley, current_schuljahr, smiley_label
@@ -95,5 +96,6 @@ async def dashboard(
             "available_years": available_years,
             "filter_sj": sj or "",
             "filter_q": q or "",
+            "ai_enabled": settings.ai_enabled,
         },
     )

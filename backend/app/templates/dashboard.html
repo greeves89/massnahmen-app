@@ -13,6 +13,89 @@
   </p>
 </div>
 
+{% if ai_enabled %}
+<div id="ai-dropzone-wrap" class="mb-6">
+  <form id="ai-form" method="post" action="/massnahmen/analyse" enctype="multipart/form-data"
+        class="block">
+    <label id="ai-dropzone"
+           class="relative block cursor-pointer border-2 border-dashed border-purple-300 rounded-xl bg-gradient-to-br from-purple-50 to-blue-50 px-6 py-8 text-center hover:border-purple-500 hover:from-purple-100 hover:to-blue-100 transition">
+      <div class="text-4xl mb-2">✨</div>
+      <div class="font-semibold text-slate-900">Formular hierher ziehen für KI-Analyse</div>
+      <div class="text-sm text-slate-600 mt-1">
+        PDF oder Foto des ausgefüllten BSO-Formulars · KI erkennt Schüler, Angebot, Datum & Smileys automatisch
+      </div>
+      <div class="text-xs text-slate-500 mt-2">oder klicken zum Auswählen</div>
+      <input id="ai-file" type="file" name="file" required accept=".pdf,.jpg,.jpeg,.png,.heic,image/*,application/pdf" class="hidden">
+    </label>
+
+    <div id="ai-loading" class="hidden mt-3 bg-white border border-purple-200 rounded-xl p-4 flex items-center gap-3">
+      <div class="animate-spin h-5 w-5 border-2 border-purple-600 border-t-transparent rounded-full"></div>
+      <div class="text-sm">
+        <span class="font-medium text-slate-900">KI liest das Formular…</span>
+        <span class="text-slate-500" id="ai-filename"></span>
+        <div class="text-xs text-slate-500 mt-0.5">Das dauert ca. 5–15 Sekunden.</div>
+      </div>
+    </div>
+    <div id="ai-error" class="hidden mt-3 bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm"></div>
+  </form>
+</div>
+
+<script>
+(function() {
+  const form = document.getElementById('ai-form');
+  const dz = document.getElementById('ai-dropzone');
+  const input = document.getElementById('ai-file');
+  const loading = document.getElementById('ai-loading');
+  const errBox = document.getElementById('ai-error');
+  const fnLabel = document.getElementById('ai-filename');
+
+  function showLoading(name) {
+    dz.classList.add('hidden');
+    errBox.classList.add('hidden');
+    fnLabel.textContent = name ? ` (${name})` : '';
+    loading.classList.remove('hidden');
+  }
+  function showError(msg) {
+    loading.classList.add('hidden');
+    dz.classList.remove('hidden');
+    errBox.textContent = '⚠ ' + msg;
+    errBox.classList.remove('hidden');
+  }
+
+  async function submit(file) {
+    showLoading(file.name);
+    const fd = new FormData();
+    fd.append('file', file);
+    try {
+      const r = await fetch('/massnahmen/analyse', { method: 'POST', body: fd, redirect: 'follow' });
+      if (r.redirected) { window.location = r.url; return; }
+      if (r.ok) { window.location.reload(); return; }
+      let detail = 'KI-Analyse fehlgeschlagen.';
+      try { const j = await r.json(); if (j.detail) detail = j.detail; } catch(_) {}
+      showError(detail);
+    } catch (e) {
+      showError('Netzwerk-Fehler: ' + e.message);
+    }
+  }
+
+  input.addEventListener('change', () => {
+    if (input.files && input.files[0]) submit(input.files[0]);
+  });
+
+  ['dragenter', 'dragover'].forEach(ev => {
+    dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.add('border-purple-600', 'bg-purple-100'); });
+  });
+  ['dragleave', 'drop'].forEach(ev => {
+    dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.remove('border-purple-600', 'bg-purple-100'); });
+  });
+  dz.addEventListener('drop', e => {
+    e.preventDefault();
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) submit(e.dataTransfer.files[0]);
+  });
+})();
+</script>
+{% endif %}
+
 {% if total_all > 0 %}
 <form method="get" action="/" class="bg-white rounded-xl border border-slate-200 p-4 mb-6">
   <div class="flex flex-col sm:flex-row sm:items-end gap-3">
