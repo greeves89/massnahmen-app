@@ -477,9 +477,8 @@ async def analyze_and_create(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"KI-Analyse fehlgeschlagen: {e}")
 
-    angebot_d = _safe_date(extracted.get("angebot_datum"))
-
-    # Existing categories for fuzzy match
+    # Vereinfachtes Schema: KI liefert nur angebot + bewertung + notizen.
+    # Alle anderen Felder kann Julia danach selber setzen.
     cat_rows = await session.execute(
         select(Massnahme.kategorie).where(
             Massnahme.user_id == user.id, Massnahme.kategorie.is_not(None)
@@ -487,28 +486,25 @@ async def analyze_and_create(
     )
     existing_categories = sorted({c for (c,) in cat_rows if c})
     angebot_text = (extracted.get("angebot") or "").strip()
-    suggested = _match_category(angebot_text, existing_categories) or _str_or_none(
-        extracted.get("kategorie")
-    )
+    suggested = _match_category(angebot_text, existing_categories)
 
+    today = date.today()
     massnahme = Massnahme(
         user_id=user.id,
-        schueler_name=(extracted.get("schueler_name") or "(unbekannt)").strip()[:255],
-        angebot=angebot_text[:500] or "(unbekannt)",
+        schueler_name="—",  # Julia kann manuell setzen
+        angebot=angebot_text[:500] or "(KI konnte Angebot nicht lesen)",
         kategorie=suggested,
-        angebot_datum=angebot_d,
-        freistellung_nummer=_int_in_set(extracted.get("freistellung_nummer"), {1, 2, 3}),
-        schuljahr=(
-            schuljahr_for_date(angebot_d) if angebot_d else current_schuljahr()
-        ),
-        beurlaubung_status=_status_or_none(extracted.get("beurlaubung_status")),
-        beurlaubung_begruendung=_str_or_none(extracted.get("beurlaubung_begruendung")),
-        teilnahme_bestaetigt=bool(extracted.get("teilnahme_bestaetigt")),
-        teilnahme_datum=_safe_date(extracted.get("teilnahme_datum")),
-        institution_name=_str_or_none(extracted.get("institution_name")),
-        bestaetigung_per_email=bool(extracted.get("bestaetigung_per_email")),
-        kenntnis_tutor_datum=_safe_date(extracted.get("kenntnis_tutor_datum")),
-        kenntnis_eltern_datum=_safe_date(extracted.get("kenntnis_eltern_datum")),
+        angebot_datum=today,  # Default: heute (Julia kann ändern)
+        freistellung_nummer=None,
+        schuljahr=current_schuljahr(),
+        beurlaubung_status=None,
+        beurlaubung_begruendung=None,
+        teilnahme_bestaetigt=False,
+        teilnahme_datum=None,
+        institution_name=None,
+        bestaetigung_per_email=False,
+        kenntnis_tutor_datum=None,
+        kenntnis_eltern_datum=None,
         notizen=_str_or_none(extracted.get("notizen")),
     )
     bew = extracted.get("bewertung") or {}

@@ -85,79 +85,45 @@ def file_to_image_payloads(filename: str, data: bytes) -> list[str]:
 
 # ---------- Pass 1 — Reasoning / Beschreibung ----------
 
-DESCRIBE_PROMPT = """Du betrachtest ein deutsches Schul-Formular für Berufs- und Studienorientierung (BSO).
-Beschreibe jetzt SCHRITT FÜR SCHRITT was du siehst — sehr präzise und ehrlich.
+DESCRIBE_PROMPT = """Du betrachtest ein deutsches BSO-Formular (Berufs- und Studienorientierung).
+Ich brauche von dir NUR ZWEI Sachen — sonst nichts:
 
-Wichtige Regeln:
-- Wenn Handschrift NICHT eindeutig lesbar ist, schreib "unlesbar" oder "unsicher: könnte X oder Y sein".
-- Erfinde NIEMALS Wörter, die du nicht klar siehst. Lieber "unlesbar".
-- Beschreibe für jedes Feld: was steht da? Bist du sicher? Welche Buchstaben siehst du?
-- Bei Checkboxes: ist da deutlich ein Kreuz/Häkchen? Oder ist die Box leer?
-- Bei den 3 Spalten der Bewertungs-Tabelle (LINKS=positiv, MITTE=neutral, RECHTS=negativ):
-  In welcher Spalte sitzt für jede Zeile die Markierung? Oder ist die Zeile leer?
+1) WAS IST DAS ANGEBOT / DIE MASSNAHME?
+   Wo steht "(z.B. Vocatium)" auf der Linie davor — was wurde dort eingetragen?
+   Beispiele: "Vocatium Hamburg", "BIZ-Besuch", "Tag der offenen Tür Uni Köln",
+   "Praktikumstag bei Siemens", "Vocatium Potsdam".
+   Wenn Handschrift unklar: schreib "sieht aus wie X" und gib mehrere Lese-Tipps.
+   Wenn komplett unlesbar: schreib "unleserlich".
 
-Gehe Sektion für Sektion durch:
-A. Antrag auf Freistellung
-   - Schüler-Name: was steht auf der Linie? (Buchstaben einzeln aufzählen wenn unsicher)
-   - Angebot: was steht auf der Linie?
-   - Datum: welche Zahlen siehst du?
-   - Freistellungs-Checkboxes 1/2/3: ist eine angekreuzt? Wenn ja welche?
-   - Unterschriften: Datum und Name (oder "unleserlich")
+2) WIE LAUTET DIE BEWERTUNG?
+   Es gibt 5 Zeilen in der Rückmeldungs-Tabelle. Die Tabelle hat 3 Spalten von
+   LINKS nach RECHTS:
+   - SPALTE 1 (links) = ☺ positiv (Wert 1)
+   - SPALTE 2 (mitte) = ☻ neutral (Wert 0)
+   - SPALTE 3 (rechts) = ☹ negativ (Wert -1)
 
-B. Beurlaubungs-Entscheidung
-   - Ist "Beurlaubung wird erteilt" angekreuzt?
-   - Ist "Beurlaubung wird nicht erteilt" angekreuzt?
-   - Beides leer = "noch nicht entschieden"
-   - Datum + Unterschrift Tutor
+   Für JEDE der 5 Zeilen: in welcher Spalte sitzt die Markierung
+   (Kreuz/Kreis/Haken/Strich)? Oder ist die ganze Zeile leer?
 
-C. Bestätigung der Teilnahme
-   - Name (Bestätigender)
-   - Datum
-   - Institution / Stempel
-   - "E-Mail-Bestätigung angehängt" Checkbox: leer oder angekreuzt?
+   Zeilen-Reihenfolge:
+   a) "informativ und qualitativ gut" → Spalte?
+   b) "persönlich geholfen" → Spalte?
+   c) "gute Orientierung" → Spalte?
+   d) "anderen zu empfehlen" → Spalte?
+   e) "bei Entscheidung geholfen" → Spalte?
 
-D. Rückmeldung (5 Zeilen)
-   Für jede Zeile genau angeben: Markierung in LINKER (positiv), MITTLERER (neutral),
-   RECHTER (negativ) Spalte — oder leer?
-   1) "war informativ und qualitativ gut" → ?
-   2) "hat mir persönlich geholfen" → ?
-   3) "gab eine gute Orientierung" → ?
-   4) "ist auch anderen zu empfehlen" → ?
-   5) "hat mir bei einer Entscheidung geholfen" → ?
-
-E. Kenntnisnahme
-   - Datum + Unterschrift Tutor
-   - Datum + Unterschrift Eltern
-
-Antworte als reiner Text (KEIN JSON), eine Sektion pro Absatz."""
+Antworte ALS REINER TEXT (kein JSON), kurz und präzise:
+- Erste Zeile: "Angebot: ..." (mit besten Tipps)
+- Danach 5 Zeilen, eine pro Bewertungs-Aussage: "a) links/mitte/rechts/leer", "b) ...", etc."""
 
 
 # ---------- Pass 2 — Strukturierung in JSON ----------
 
-JSON_PROMPT_TEMPLATE = """Du bekommst gleich eine Beschreibung eines BSO-Formulars (siehe unten).
-Konvertiere die Beschreibung in striktes JSON nach diesem Schema.
+JSON_PROMPT_TEMPLATE = """Du bekommst gleich eine kurze Beschreibung eines BSO-Formulars.
+Konvertiere sie in striktes JSON nach diesem Schema:
 
-REGELN:
-1. Wenn die Beschreibung einen Wert nennt (auch mit "sieht aus wie X" oder "unsicher: könnte X sein"):
-   → den BESTEN TIPP ins Feld eintragen UND in `notizen` als unsicher markieren ("schueler_name unsicher: 'X' — auch 'Y' möglich").
-2. NUR bei "komplett leer", "leer", "nicht ausgefüllt" oder "unleserlich" ohne jeden Tipp → null (Strings) bzw. false (Booleans).
-3. Bei Checkboxes: nur true wenn Beschreibung "angekreuzt", "Kreuz", "Häkchen" sagt. Sonst false / null.
-4. Datum-Format YYYY-MM-DD. "29.09.26" → "2026-09-29". Zweistellige Jahre ≥ 24 → 20xx, sonst 19xx (nicht relevant).
-5. Bewertung: linke Spalte = 1, mittlere = 0, rechte = -1, leere Zeile = null.
-6. NIEMALS Daten erfinden, die nicht in der Beschreibung stehen.
-
-Schema:
 {{
-  "schueler_name": string | null,
   "angebot": string | null,
-  "angebot_datum": "YYYY-MM-DD" | null,
-  "freistellung_nummer": 1 | 2 | 3 | null,
-  "beurlaubung_status": "erteilt" | "nicht_erteilt" | null,
-  "beurlaubung_begruendung": string | null,
-  "teilnahme_bestaetigt": boolean,
-  "teilnahme_datum": "YYYY-MM-DD" | null,
-  "institution_name": string | null,
-  "bestaetigung_per_email": boolean,
   "bewertung": {{
     "informativ":   1 | 0 | -1 | null,
     "persoenlich":  1 | 0 | -1 | null,
@@ -165,12 +131,13 @@ Schema:
     "empfehlung":   1 | 0 | -1 | null,
     "entscheidung": 1 | 0 | -1 | null
   }},
-  "kenntnis_tutor_datum": "YYYY-MM-DD" | null,
-  "kenntnis_eltern_datum": "YYYY-MM-DD" | null,
   "notizen": string | null
 }}
 
-In `notizen` kurz festhalten, welche Felder unsicher / unlesbar waren (für menschliche Review).
+REGELN:
+- `angebot`: bester Tipp aus der Beschreibung. Wenn "unleserlich" → null.
+- Bewertung: "links" → 1, "mitte" → 0, "rechts" → -1, "leer" → null.
+- `notizen`: kurze Liste was unsicher war (für manuelle Prüfung). Leer wenn alles sicher.
 
 === BESCHREIBUNG ===
 {description}
@@ -209,6 +176,72 @@ async def _call_azure(messages: list[dict[str, Any]], json_mode: bool = False, m
 
 # ---------- Public API ----------
 
+import re
+
+_POS = re.compile(r"\b(links?|positiv|smile|☺|positive)\b", re.IGNORECASE)
+_NEU = re.compile(r"\b(mitte|mittlere?|neutral|meh|☻)\b", re.IGNORECASE)
+_NEG = re.compile(r"\b(rechts?|negativ|frown|☹|negative)\b", re.IGNORECASE)
+_LEER = re.compile(r"\b(leer|keine? markierung|empty|none)\b", re.IGNORECASE)
+
+
+def _parse_zeile(text: str) -> int | None:
+    """Mappe eine Zeile wie 'a) mitte' auf den numerischen Wert."""
+    # Priorität: explicit "leer" > spezifische Position
+    if _LEER.search(text):
+        return None
+    if _POS.search(text):
+        return 1
+    if _NEG.search(text):
+        return -1
+    if _NEU.search(text):
+        return 0
+    return None
+
+
+def _deterministic_parse(description: str) -> dict[str, Any]:
+    """Parse Pass-1-Beschreibung deterministisch (kein LLM, kein Mapping-Fehler)."""
+    angebot: str | None = None
+    bewertung_keys = ("informativ", "persoenlich", "orientierung", "empfehlung", "entscheidung")
+    bewertung: dict[str, int | None] = dict.fromkeys(bewertung_keys, None)
+    notizen_parts: list[str] = []
+
+    for raw_line in description.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        low = line.lower()
+
+        # Angebot
+        m = re.match(r"^\s*angebot[:\-]\s*(.+)$", line, re.IGNORECASE)
+        if m:
+            value = m.group(1).strip().strip(".")
+            value = re.sub(r"\s*\([^)]*\)\s*$", "", value).strip()
+            if value and "unleserlich" not in value.lower() and "unbekannt" not in value.lower():
+                angebot = value
+            continue
+
+        # Zeilen-Marker a) b) c) d) e)  oder  1) 2) 3) 4) 5)
+        m = re.match(r"^\s*([a-e1-5])[\.\)]\s+(.+)$", line, re.IGNORECASE)
+        if m:
+            idx_char = m.group(1).lower()
+            mapping = {"a": 0, "b": 1, "c": 2, "d": 3, "e": 4,
+                       "1": 0, "2": 1, "3": 2, "4": 3, "5": 4}
+            idx = mapping.get(idx_char)
+            if idx is not None and idx < len(bewertung_keys):
+                bewertung[bewertung_keys[idx]] = _parse_zeile(m.group(2))
+            continue
+
+        # Notizen-Hinweis
+        if any(w in low for w in ("unsicher", "unleserlich", "schwer lesbar", "wahrscheinlich")):
+            notizen_parts.append(line)
+
+    return {
+        "angebot": angebot,
+        "bewertung": bewertung,
+        "notizen": " · ".join(notizen_parts) if notizen_parts else None,
+    }
+
+
 async def extract_from_file(filename: str, data: bytes) -> dict[str, Any]:
     if not settings.ai_enabled:
         raise RuntimeError("KI-Analyse ist nicht aktiviert.")
@@ -219,24 +252,14 @@ async def extract_from_file(filename: str, data: bytes) -> dict[str, Any]:
     if not image_urls:
         raise RuntimeError("Aus der Datei konnten keine Seiten extrahiert werden.")
 
-    # Pass 1: Beschreibung
+    # Single Pass: Modell beschreibt strukturiert, wir parsen deterministisch.
     pass1_content: list[dict[str, Any]] = [
         {"type": "image_url", "image_url": {"url": url, "detail": "high"}} for url in image_urls
     ]
     pass1_content.append({"type": "text", "text": DESCRIBE_PROMPT})
     description = await _call_azure(
-        [{"role": "user", "content": pass1_content}], json_mode=False, max_tokens=2500
+        [{"role": "user", "content": pass1_content}], json_mode=False, max_tokens=600
     )
-    logger.info("Pass 1 description (%d chars): %s", len(description), description[:300])
+    logger.info("Description: %s", description[:300])
 
-    # Pass 2: Beschreibung → JSON
-    json_prompt = JSON_PROMPT_TEMPLATE.format(description=description)
-    raw_json = await _call_azure(
-        [{"role": "user", "content": json_prompt}], json_mode=True, max_tokens=1500
-    )
-
-    try:
-        return json.loads(raw_json)
-    except json.JSONDecodeError as e:
-        logger.error("Could not parse AI JSON: %s — raw: %s", e, raw_json[:500])
-        raise RuntimeError("Antwort der KI konnte nicht gelesen werden.")
+    return _deterministic_parse(description)
