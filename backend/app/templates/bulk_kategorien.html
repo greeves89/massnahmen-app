@@ -13,7 +13,9 @@
       {% endif %}
     </p>
   </div>
-  <a href="/" class="text-sm text-slate-500 hover:text-slate-900">← Zurück zur Übersicht</a>
+  <a href="/" class="text-sm text-slate-500 hover:text-slate-900 inline-flex items-center gap-1">
+    <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>Zurück zur Übersicht
+  </a>
 </div>
 
 <div class="bg-white rounded-xl border border-slate-200 p-4 mb-4 flex items-center justify-between gap-3 flex-wrap">
@@ -86,7 +88,7 @@
 </div>
 {% else %}
 <div class="bg-white rounded-xl border border-slate-200 p-10 text-center">
-  <div class="text-4xl mb-2">🎉</div>
+  <i data-lucide="party-popper" class="w-10 h-10 mx-auto text-slate-400 mb-2"></i>
   <h2 class="text-base font-medium text-slate-900">
     {% if only_ohne %}Alle Maßnahmen haben eine Kategorie!{% else %}Noch keine Maßnahmen erfasst.{% endif %}
   </h2>

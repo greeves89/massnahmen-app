@@ -4,15 +4,19 @@
 
 <div class="mb-6 flex items-start justify-between gap-4">
   <div>
-    <h1 class="text-2xl font-semibold text-slate-900">📊 Analyse</h1>
-    <p class="text-slate-500 mt-1">Trends & Vergleiche über alle Schuljahre</p>
+    <h1 class="text-2xl font-semibold text-slate-900 inline-flex items-center gap-2">
+      <i data-lucide="bar-chart-3" class="w-7 h-7 text-slate-700"></i>Analyse
+    </h1>
+    <p class="text-slate-500 mt-1">Trends &amp; Vergleiche über alle Schuljahre</p>
   </div>
-  <a href="/" class="text-sm text-slate-500 hover:text-slate-900">← Übersicht</a>
+  <a href="/" class="text-sm text-slate-500 hover:text-slate-900 inline-flex items-center gap-1">
+    <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>Übersicht
+  </a>
 </div>
 
 {% if empty %}
   <div class="bg-white rounded-xl border border-slate-200 p-10 text-center">
-    <div class="text-5xl mb-3">📈</div>
+    <i data-lucide="trending-up" class="w-12 h-12 mx-auto text-slate-400 mb-3"></i>
     <h2 class="text-lg font-medium text-slate-900">Noch keine Daten</h2>
     <p class="text-slate-500 text-sm mt-1">Sobald Maßnahmen erfasst sind, erscheinen hier Trends.</p>
     <a href="/" class="inline-block mt-4 bg-slate-900 text-white px-4 py-2 rounded-md hover:bg-slate-700">Zurück</a>
@@ -38,8 +42,12 @@
   <div class="bg-white rounded-xl border border-slate-200 p-4">
     <div class="text-xs text-slate-500 uppercase tracking-wider">Letztes Schuljahr Ø</div>
     {% set last = schuljahr_trend[-1] %}
-    <div class="text-2xl font-semibold text-slate-900 mt-1">
-      {{ last.smiley }} <span class="text-sm text-slate-400 font-mono">{% if last.avg is not none %}({{ "%.2f"|format(last.avg) }}){% endif %}</span>
+    <div class="text-2xl font-semibold text-slate-900 mt-1 flex items-center gap-2">
+      {% if last.avg is none %}<i data-lucide="minus" class="w-7 h-7 text-slate-300"></i>
+      {% elif last.avg >= 0.34 %}<i data-lucide="smile" class="w-7 h-7 icon-pos"></i>
+      {% elif last.avg <= -0.34 %}<i data-lucide="frown" class="w-7 h-7 icon-neg"></i>
+      {% else %}<i data-lucide="meh" class="w-7 h-7 icon-neu"></i>{% endif %}
+      <span class="text-sm text-slate-400 font-mono">{% if last.avg is not none %}({{ "%.2f"|format(last.avg) }}){% endif %}</span>
     </div>
   </div>
 </div>
@@ -47,13 +55,16 @@
 <!-- Schuljahr-Trend -->
 <section class="bg-white rounded-xl border border-slate-200 mb-6 p-5">
   <h2 class="font-semibold text-slate-900 mb-1">Bewertungs-Trend pro Schuljahr</h2>
-  <p class="text-xs text-slate-500 mb-4">Durchschnitt aller Maßnahmen je Schuljahr (Skala -1 = 😞, 0 = 😐, +1 = 😊)</p>
+  <p class="text-xs text-slate-500 mb-4">Durchschnitt aller Maßnahmen je Schuljahr (Skala -1 = negativ, 0 = neutral, +1 = positiv)</p>
   <canvas id="schuljahr-chart" height="80"></canvas>
   <div class="grid grid-cols-2 sm:grid-cols-{{ schuljahr_trend|length }} gap-2 mt-4 text-sm">
     {% for s in schuljahr_trend %}
     <div class="text-center bg-slate-50 rounded-lg p-2">
       <div class="text-xs text-slate-500">{{ s.schuljahr }}</div>
-      <div class="text-2xl">{{ s.smiley }}</div>
+      {% if s.avg is none %}<i data-lucide="minus" class="w-6 h-6 mx-auto text-slate-300"></i>
+      {% elif s.avg >= 0.34 %}<i data-lucide="smile" class="w-6 h-6 mx-auto icon-pos"></i>
+      {% elif s.avg <= -0.34 %}<i data-lucide="frown" class="w-6 h-6 mx-auto icon-neg"></i>
+      {% else %}<i data-lucide="meh" class="w-6 h-6 mx-auto icon-neu"></i>{% endif %}
       <div class="text-xs text-slate-500">{{ s.anzahl }} Maßn.{% if s.avg is not none %} · {{ "%.2f"|format(s.avg) }}{% endif %}</div>
     </div>
     {% endfor %}
@@ -85,24 +96,27 @@
           <td class="px-3 py-2 text-center text-slate-500">{{ cat.anzahl }}</td>
           {% for p in cat.per_year %}
           <td class="px-3 py-2 text-center">
-            {% if p.avg is none %}<span class="text-slate-300">—</span>
+            {% if p.avg is none %}<i data-lucide="minus" class="w-4 h-4 mx-auto text-slate-300"></i>
             {% else %}
-              <div class="text-lg">
-                {% if p.avg >= 0.34 %}😊{% elif p.avg <= -0.34 %}😞{% else %}😐{% endif %}
-              </div>
+              {% if p.avg >= 0.34 %}<i data-lucide="smile" class="w-5 h-5 mx-auto icon-pos"></i>
+              {% elif p.avg <= -0.34 %}<i data-lucide="frown" class="w-5 h-5 mx-auto icon-neg"></i>
+              {% else %}<i data-lucide="meh" class="w-5 h-5 mx-auto icon-neu"></i>{% endif %}
               <div class="text-xs text-slate-400">{{ "%.2f"|format(p.avg) }} · n={{ p.n }}</div>
             {% endif %}
           </td>
           {% endfor %}
           <td class="px-3 py-2 text-center">
-            <div class="text-lg">{{ cat.gesamt_smiley }}</div>
+            {% if cat.gesamt_avg is none %}<i data-lucide="minus" class="w-4 h-4 mx-auto text-slate-300"></i>
+            {% elif cat.gesamt_avg >= 0.34 %}<i data-lucide="smile" class="w-5 h-5 mx-auto icon-pos"></i>
+            {% elif cat.gesamt_avg <= -0.34 %}<i data-lucide="frown" class="w-5 h-5 mx-auto icon-neg"></i>
+            {% else %}<i data-lucide="meh" class="w-5 h-5 mx-auto icon-neu"></i>{% endif %}
             {% if cat.gesamt_avg is not none %}<div class="text-xs text-slate-400">{{ "%.2f"|format(cat.gesamt_avg) }}</div>{% endif %}
           </td>
           <td class="px-3 py-2 text-center">
-            {% if cat.trend_delta is none %}<span class="text-slate-300">—</span>
-            {% elif cat.trend_delta > 0.1 %}<span class="text-green-600 font-medium">▲ +{{ "%.2f"|format(cat.trend_delta) }}</span>
-            {% elif cat.trend_delta < -0.1 %}<span class="text-red-600 font-medium">▼ {{ "%.2f"|format(cat.trend_delta) }}</span>
-            {% else %}<span class="text-slate-500">≈ {{ "%.2f"|format(cat.trend_delta) }}</span>
+            {% if cat.trend_delta is none %}<i data-lucide="minus" class="w-4 h-4 mx-auto text-slate-300"></i>
+            {% elif cat.trend_delta > 0.1 %}<span class="text-green-600 font-medium inline-flex items-center gap-0.5"><i data-lucide="arrow-up" class="w-3.5 h-3.5"></i>+{{ "%.2f"|format(cat.trend_delta) }}</span>
+            {% elif cat.trend_delta < -0.1 %}<span class="text-red-600 font-medium inline-flex items-center gap-0.5"><i data-lucide="arrow-down" class="w-3.5 h-3.5"></i>{{ "%.2f"|format(cat.trend_delta) }}</span>
+            {% else %}<span class="text-slate-500 inline-flex items-center gap-0.5"><i data-lucide="minus" class="w-3.5 h-3.5"></i>{{ "%.2f"|format(cat.trend_delta) }}</span>
             {% endif %}
           </td>
         </tr>
@@ -115,14 +129,18 @@
 <!-- Top / Flop -->
 <div class="grid md:grid-cols-2 gap-4 mb-6">
   <section class="bg-white rounded-xl border border-slate-200 p-5">
-    <h2 class="font-semibold text-slate-900 mb-3">🏆 Top-Kategorien</h2>
+    <h2 class="font-semibold text-slate-900 mb-3 inline-flex items-center gap-2">
+      <i data-lucide="trophy" class="w-5 h-5 text-amber-500"></i>Top-Kategorien
+    </h2>
     {% if top %}
     <ol class="space-y-2">
       {% for cat, avg, n in top %}
       <li class="flex items-center gap-3">
-        <span class="text-2xl">{% if avg >= 0.34 %}😊{% elif avg <= -0.34 %}😞{% else %}😐{% endif %}</span>
+        {% if avg >= 0.34 %}<i data-lucide="smile" class="w-6 h-6 icon-pos"></i>
+        {% elif avg <= -0.34 %}<i data-lucide="frown" class="w-6 h-6 icon-neg"></i>
+        {% else %}<i data-lucide="meh" class="w-6 h-6 icon-neu"></i>{% endif %}
         <span class="flex-1 text-sm font-medium text-slate-900">{{ cat }}</span>
-        <span class="text-xs text-slate-500">{{ n }} ×</span>
+        <span class="text-xs text-slate-500">{{ n }}×</span>
         <span class="font-mono text-xs text-slate-500">{{ "%.2f"|format(avg) }}</span>
       </li>
       {% endfor %}
@@ -131,14 +149,18 @@
   </section>
 
   <section class="bg-white rounded-xl border border-slate-200 p-5">
-    <h2 class="font-semibold text-slate-900 mb-3">📉 Verbesserungspotenzial</h2>
+    <h2 class="font-semibold text-slate-900 mb-3 inline-flex items-center gap-2">
+      <i data-lucide="trending-down" class="w-5 h-5 text-slate-500"></i>Verbesserungspotenzial
+    </h2>
     {% if flop %}
     <ol class="space-y-2">
       {% for cat, avg, n in flop %}
       <li class="flex items-center gap-3">
-        <span class="text-2xl">{% if avg >= 0.34 %}😊{% elif avg <= -0.34 %}😞{% else %}😐{% endif %}</span>
+        {% if avg >= 0.34 %}<i data-lucide="smile" class="w-6 h-6 icon-pos"></i>
+        {% elif avg <= -0.34 %}<i data-lucide="frown" class="w-6 h-6 icon-neg"></i>
+        {% else %}<i data-lucide="meh" class="w-6 h-6 icon-neu"></i>{% endif %}
         <span class="flex-1 text-sm font-medium text-slate-900">{{ cat }}</span>
-        <span class="text-xs text-slate-500">{{ n }} ×</span>
+        <span class="text-xs text-slate-500">{{ n }}×</span>
         <span class="font-mono text-xs text-slate-500">{{ "%.2f"|format(avg) }}</span>
       </li>
       {% endfor %}
@@ -160,62 +182,37 @@
   const kategorieData = {{ kategorie_zeitreihe|tojson }};
   const frageData = {{ pro_frage|tojson }};
 
-  // Schuljahr-Trend (Linie)
   new Chart(document.getElementById('schuljahr-chart'), {
     type: 'line',
-    data: {
-      labels: schuljahre,
-      datasets: [{
-        label: 'Ø Bewertung',
-        data: trendData.map(s => s.avg),
-        borderColor: 'rgb(59, 130, 246)',
-        backgroundColor: 'rgba(59, 130, 246, 0.15)',
-        tension: 0.3, fill: true, spanGaps: true,
-      }]
-    },
-    options: {
-      scales: { y: { min: -1, max: 1, ticks: { stepSize: 0.5 } } },
-      plugins: { legend: { display: false } }
-    }
+    data: { labels: schuljahre, datasets: [{
+      label: 'Ø Bewertung', data: trendData.map(s => s.avg),
+      borderColor: 'rgb(59, 130, 246)', backgroundColor: 'rgba(59, 130, 246, 0.15)',
+      tension: 0.3, fill: true, spanGaps: true,
+    }] },
+    options: { scales: { y: { min: -1, max: 1, ticks: { stepSize: 0.5 } } }, plugins: { legend: { display: false } } }
   });
 
-  // Pro Kategorie über Jahre — eine Linie pro Kategorie (max 8)
   const palette = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#06b6d4','#84cc16'];
   new Chart(document.getElementById('kategorie-chart'), {
     type: 'line',
-    data: {
-      labels: schuljahre,
-      datasets: kategorieData.slice(0, 8).map((cat, i) => ({
-        label: cat.kategorie + ' (' + cat.anzahl + ')',
-        data: cat.per_year.map(p => p.avg),
-        borderColor: palette[i % palette.length],
-        backgroundColor: palette[i % palette.length] + '20',
-        tension: 0.3, spanGaps: true,
-      }))
-    },
-    options: {
-      scales: { y: { min: -1, max: 1, ticks: { stepSize: 0.5 } } },
-      plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } }
-    }
+    data: { labels: schuljahre, datasets: kategorieData.slice(0, 8).map((cat, i) => ({
+      label: cat.kategorie + ' (' + cat.anzahl + ')',
+      data: cat.per_year.map(p => p.avg),
+      borderColor: palette[i % palette.length],
+      backgroundColor: palette[i % palette.length] + '20',
+      tension: 0.3, spanGaps: true,
+    })) },
+    options: { scales: { y: { min: -1, max: 1, ticks: { stepSize: 0.5 } } }, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } } }
   });
 
-  // Pro Frage über Jahre
   new Chart(document.getElementById('frage-chart'), {
     type: 'line',
-    data: {
-      labels: schuljahre,
-      datasets: frageData.map((f, i) => ({
-        label: f.label,
-        data: f.per_year.map(p => p.avg),
-        borderColor: palette[i % palette.length],
-        backgroundColor: palette[i % palette.length] + '20',
-        tension: 0.3, spanGaps: true,
-      }))
-    },
-    options: {
-      scales: { y: { min: -1, max: 1, ticks: { stepSize: 0.5 } } },
-      plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } }
-    }
+    data: { labels: schuljahre, datasets: frageData.map((f, i) => ({
+      label: f.label, data: f.per_year.map(p => p.avg),
+      borderColor: palette[i % palette.length], backgroundColor: palette[i % palette.length] + '20',
+      tension: 0.3, spanGaps: true,
+    })) },
+    options: { scales: { y: { min: -1, max: 1, ticks: { stepSize: 0.5 } } }, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } } }
   });
 </script>
 {% endif %}
