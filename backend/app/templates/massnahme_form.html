@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Neue Maßnahme{% endblock %}
+{% block content %}
+
+<div class="max-w-2xl mx-auto">
+  <div class="mb-6">
+    <a href="/" class="text-sm text-slate-500 hover:text-slate-900">← Zurück</a>
+    <h1 class="text-2xl font-semibold text-slate-900 mt-2">Neue Maßnahme</h1>
+    <p class="text-slate-500 text-sm mt-1">Erfasse die Basis-Daten. Bestätigung & Bewertung kannst du danach ergänzen.</p>
+  </div>
+
+  <form method="post" action="/massnahmen/neu" class="bg-white rounded-xl border border-slate-200 p-6 space-y-5">
+    <div>
+      <label class="block text-sm font-medium text-slate-700 mb-1">Schüler/in *</label>
+      <input type="text" name="schueler_name" required
+             class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-slate-900 focus:border-slate-900 outline-none">
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-slate-700 mb-1">Angebot *</label>
+      <input type="text" name="angebot" required placeholder="z.B. Vocatium, BIZ-Besuch, Tag der offenen Tür"
+             class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-slate-900 focus:border-slate-900 outline-none">
+    </div>
+
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Datum</label>
+        <input type="date" name="angebot_datum" value="{{ today }}"
+               class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-slate-900 focus:border-slate-900 outline-none">
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Freistellung</label>
+        <select name="freistellung_nummer"
+                class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-slate-900 focus:border-slate-900 outline-none">
+          <option value="">—</option>
+          <option value="1">1. Freistellung</option>
+          <option value="2">2. Freistellung</option>
+          <option value="3">3. Freistellung</option>
+        </select>
+      </div>
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-slate-700 mb-1">Schuljahr</label>
+      <input type="text" name="schuljahr" value="{{ schuljahr_default }}" placeholder="z.B. 2025/2026"
+             class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-slate-900 focus:border-slate-900 outline-none">
+      <p class="text-xs text-slate-500 mt-1">Wird automatisch aus dem Datum bestimmt (1.8.–31.7.)</p>
+    </div>
+
+    <div class="flex gap-3 pt-2">
+      <button type="submit" class="bg-slate-900 text-white px-5 py-2 rounded-md font-medium hover:bg-slate-700 transition">
+        Maßnahme anlegen
+      </button>
+      <a href="/" class="px-5 py-2 text-slate-600 hover:text-slate-900">Abbrechen</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

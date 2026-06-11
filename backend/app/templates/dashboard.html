@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Übersicht · Maßnahmen-Auswertung{% endblock %}
+{% block content %}
+
+<div class="mb-6">
+  <h1 class="text-2xl font-semibold text-slate-900">Übersicht</h1>
+  <p class="text-slate-500 mt-1">
+    {{ total }} Maßnahme{% if total != 1 %}n{% endif %} · Aktuelles Schuljahr {{ current_schuljahr }}
+  </p>
+</div>
+
+{% if not stats %}
+  <div class="bg-white rounded-xl border border-slate-200 p-10 text-center">
+    <div class="text-5xl mb-3">📋</div>
+    <h2 class="text-lg font-medium text-slate-900">Noch keine Maßnahme erfasst</h2>
+    <p class="text-slate-500 text-sm mt-1">Lege deine erste BSO-Maßnahme an.</p>
+    <a href="/massnahmen/neu" class="inline-block mt-4 bg-slate-900 text-white px-4 py-2 rounded-md hover:bg-slate-700 transition">+ Neue Maßnahme</a>
+  </div>
+{% endif %}
+
+{% for s in stats %}
+<section class="mb-8">
+  <header class="flex items-baseline justify-between mb-3">
+    <h2 class="text-lg font-semibold text-slate-900">Schuljahr {{ s.schuljahr }}</h2>
+    <span class="text-sm text-slate-500">{{ s.anzahl }} Maßnahme{% if s.anzahl != 1 %}n{% endif %}</span>
+  </header>
+
+  <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+    <div class="p-4 bg-slate-50 border-b border-slate-200">
+      <h3 class="text-sm font-medium text-slate-700 mb-3">Bewertungs-Aggregat</h3>
+      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+        {% for key, label in bewertungs_fields %}
+          {% set f = s.feld_averages[key] %}
+          <div class="bg-white rounded-lg border border-slate-200 px-3 py-3 text-center">
+            <div class="text-3xl">{{ f.smiley }}</div>
+            <div class="text-xs text-slate-500 mt-1 leading-tight">{{ f.label }}</div>
+            <div class="text-xs text-slate-400 mt-0.5">({{ f.count }})</div>
+          </div>
+        {% endfor %}
+      </div>
+      {% if s.gesamt_avg is not none %}
+      <div class="mt-4 flex items-center gap-2 text-sm text-slate-600">
+        <span>Gesamtdurchschnitt:</span>
+        <span class="text-xl">{{ s.gesamt_smiley }}</span>
+        <span class="font-mono text-slate-500">({{ "%.2f"|format(s.gesamt_avg) }})</span>
+      </div>
+      {% endif %}
+    </div>
+
+    <table class="w-full">
+      <thead>
+        <tr class="text-left text-xs text-slate-500 uppercase tracking-wider border-b border-slate-200">
+          <th class="px-4 py-2 font-medium">Schüler/in</th>
+          <th class="px-4 py-2 font-medium">Angebot</th>
+          <th class="px-4 py-2 font-medium">Datum</th>
+          <th class="px-4 py-2 font-medium">Status</th>
+          <th class="px-4 py-2 font-medium text-center">Ø</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for m in s.massnahmen %}
+        <tr class="hover:bg-slate-50 cursor-pointer" onclick="window.location='/massnahmen/{{ m.id }}'">
+          <td class="px-4 py-3 font-medium text-slate-900">{{ m.schueler_name }}</td>
+          <td class="px-4 py-3 text-slate-700">
+            {{ m.angebot }}
+            {% if m.freistellung_nummer %}<span class="text-xs text-slate-400 ml-1">· {{ m.freistellung_nummer }}. Freist.</span>{% endif %}
+          </td>
+          <td class="px-4 py-3 text-slate-600 text-sm">
+            {% if m.angebot_datum %}{{ m.angebot_datum.strftime('%d.%m.%Y') }}{% else %}—{% endif %}
+          </td>
+          <td class="px-4 py-3 text-xs">
+            {% if m.beurlaubung_status == "erteilt" %}
+              <span class="bg-green-50 text-green-700 px-2 py-0.5 rounded">Beurlaubt</span>
+            {% elif m.beurlaubung_status == "nicht_erteilt" %}
+              <span class="bg-red-50 text-red-700 px-2 py-0.5 rounded">Abgelehnt</span>
+            {% endif %}
+            {% if m.teilnahme_bestaetigt %}
+              <span class="bg-blue-50 text-blue-700 px-2 py-0.5 rounded ml-1">Teilgenommen</span>
+            {% endif %}
+          </td>
+          <td class="px-4 py-3 text-center text-xl">
+            {% set avg = m.bewertung_average %}
+            {% if avg is none %}<span class="text-slate-300">—</span>
+            {% elif avg >= 0.34 %}😊
+            {% elif avg <= -0.34 %}😞
+            {% else %}😐
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endfor %}
+{% endblock %}

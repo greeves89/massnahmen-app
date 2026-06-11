@@ -1,0 +1,18 @@
+services:
+  app:
+    build: ./backend
+    container_name: massnahmen-app
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8090:8000"
+    environment:
+      SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in .env}
+      DATABASE_URL: sqlite+aiosqlite:////data/massnahmen.db
+      INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL:-admin@example.com}
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:?Set INITIAL_ADMIN_PASSWORD in .env}
+      INITIAL_ADMIN_NAME: ${INITIAL_ADMIN_NAME:-Admin}
+    volumes:
+      - massnahmen-data:/data
+
+volumes:
+  massnahmen-data:
