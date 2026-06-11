@@ -4,7 +4,7 @@ services:
     container_name: massnahmen-app
     restart: unless-stopped
     ports:
-      - "127.0.0.1:8090:8000"
+      - "127.0.0.1:${HOST_PORT:-8090}:8000"
     environment:
       SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in .env}
       DATABASE_URL: sqlite+aiosqlite:////data/massnahmen.db
