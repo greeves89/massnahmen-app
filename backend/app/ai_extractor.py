@@ -137,11 +137,14 @@ Antworte als reiner Text (KEIN JSON), eine Sektion pro Absatz."""
 JSON_PROMPT_TEMPLATE = """Du bekommst gleich eine Beschreibung eines BSO-Formulars (siehe unten).
 Konvertiere die Beschreibung in striktes JSON nach diesem Schema.
 
-WICHTIG:
-- Wenn die Beschreibung "unlesbar", "unsicher", "leer" oder ähnliches enthält → entsprechendes Feld `null` (Strings) bzw. `false` (Booleans).
-- KEINE Daten erfinden, die nicht in der Beschreibung stehen.
-- Datum-Format YYYY-MM-DD. "29.09.26" → "2026-09-29". Zweistellige Jahre ab 24 = 20xx.
-- Bewertung: positive Spalte (links) = 1, neutrale (mitte) = 0, negative (rechts) = -1, leer = null.
+REGELN:
+1. Wenn die Beschreibung einen Wert nennt (auch mit "sieht aus wie X" oder "unsicher: könnte X sein"):
+   → den BESTEN TIPP ins Feld eintragen UND in `notizen` als unsicher markieren ("schueler_name unsicher: 'X' — auch 'Y' möglich").
+2. NUR bei "komplett leer", "leer", "nicht ausgefüllt" oder "unleserlich" ohne jeden Tipp → null (Strings) bzw. false (Booleans).
+3. Bei Checkboxes: nur true wenn Beschreibung "angekreuzt", "Kreuz", "Häkchen" sagt. Sonst false / null.
+4. Datum-Format YYYY-MM-DD. "29.09.26" → "2026-09-29". Zweistellige Jahre ≥ 24 → 20xx, sonst 19xx (nicht relevant).
+5. Bewertung: linke Spalte = 1, mittlere = 0, rechte = -1, leere Zeile = null.
+6. NIEMALS Daten erfinden, die nicht in der Beschreibung stehen.
 
 Schema:
 {{
