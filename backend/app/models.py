@@ -61,7 +61,8 @@ class Massnahme(Base):
 
     # Sonstiges
     notizen: Mapped[str | None] = mapped_column(Text, nullable=True)
-    confidence: Mapped[int | None] = mapped_column(Integer, nullable=True)  # 0-100, NULL = manuell angelegt
+    confidence: Mapped[int | None] = mapped_column(Integer, nullable=True)  # 0-100, NULL = manuell
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
@@ -69,6 +70,15 @@ class Massnahme(Base):
     anhaenge: Mapped[list["Anhang"]] = relationship(
         back_populates="massnahme", cascade="all, delete-orphan", order_by="Anhang.created_at"
     )
+
+    @property
+    def needs_review(self) -> bool:
+        """True wenn Maßnahme von KI angelegt wurde, Confidence < 80% und noch nicht geprüft."""
+        return (
+            self.confidence is not None
+            and self.confidence < 80
+            and self.reviewed_at is None
+        )
 
     @property
     def bewertungs_felder(self) -> dict[str, int | None]:

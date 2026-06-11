@@ -118,6 +118,11 @@
         params.delete('deleted');
         window.history.replaceState({}, '', window.location.pathname + (params.toString() ? '?' + params.toString() : ''));
       }
+      if (params.has('reviewed')) {
+        setTimeout(() => window.showToast('Als geprüft markiert', 'badge-check'), 100);
+        params.delete('reviewed');
+        window.history.replaceState({}, '', window.location.pathname + (params.toString() ? '?' + params.toString() : ''));
+      }
     })();
   </script>
 </body>

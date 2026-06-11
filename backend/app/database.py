@@ -36,6 +36,7 @@ async def init_db() -> None:
             "anhang_groesse": "INTEGER",
             "kategorie": "TEXT",
             "confidence": "INTEGER",
+            "reviewed_at": "DATETIME",
         }
         for col, col_type in legacy_cols.items():
             if col not in existing_cols:

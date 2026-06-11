@@ -32,6 +32,7 @@ async def dashboard(
     session: AsyncSession = Depends(get_session),
     sj: str | None = None,
     q: str | None = None,
+    pruefen: int = 0,
 ):
     result = await session.execute(
         select(Massnahme)
@@ -44,8 +45,13 @@ async def dashboard(
     # Verfügbare Schuljahre für Filter (vor Filter berechnen)
     available_years = sorted({m.schuljahr for m in all_massnahmen}, reverse=True)
 
+    # Zu-prüfen-Counter VOR Filter (zeigt globale Zahl)
+    review_count = sum(1 for m in all_massnahmen if m.needs_review)
+
     # Filter anwenden
     massnahmen = all_massnahmen
+    if pruefen:
+        massnahmen = [m for m in massnahmen if m.needs_review]
     if sj:
         massnahmen = [m for m in massnahmen if m.schuljahr == sj]
     if q:
@@ -96,6 +102,8 @@ async def dashboard(
             "available_years": available_years,
             "filter_sj": sj or "",
             "filter_q": q or "",
+            "filter_pruefen": bool(pruefen),
+            "review_count": review_count,
             "ai_enabled": settings.ai_enabled,
         },
     )

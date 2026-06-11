@@ -153,8 +153,25 @@ async def edit_basis(
     massnahme.freistellung_nummer = _parse_int(freistellung_nummer)
     massnahme.schuljahr = schuljahr.strip() or massnahme.schuljahr
     massnahme.notizen = notizen.strip() or None
+    # Edit = implizites Review
+    if massnahme.reviewed_at is None:
+        massnahme.reviewed_at = datetime.utcnow()
     await session.commit()
     return RedirectResponse(url=f"/massnahmen/{massnahme.id}?saved=1", status_code=303)
+
+
+@router.post("/massnahmen/{massnahme_id}/review")
+async def mark_reviewed(
+    massnahme_id: int,
+    request: Request,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Markiert die Maßnahme als von Mensch geprüft → 'prüfen' Marker verschwindet."""
+    massnahme = await _get_owned(session, massnahme_id, user)
+    massnahme.reviewed_at = datetime.utcnow()
+    await session.commit()
+    return RedirectResponse(url=f"/massnahmen/{massnahme.id}?reviewed=1", status_code=303)
 
 
 @router.post("/massnahmen/{massnahme_id}/beurlaubung")
