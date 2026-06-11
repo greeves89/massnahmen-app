@@ -42,6 +42,10 @@ class Massnahme(Base):
     teilnahme_datum: Mapped[date | None] = mapped_column(Date, nullable=True)
     institution_name: Mapped[str | None] = mapped_column(String(500), nullable=True)
     bestaetigung_per_email: Mapped[bool] = mapped_column(default=False)
+    anhang_dateiname: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    anhang_pfad: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    anhang_mimetype: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    anhang_groesse: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # Rückmeldung (Smiley: 1=positiv, 0=neutral, -1=negativ, NULL=nicht bewertet)
     bewertung_informativ: Mapped[int | None] = mapped_column(Integer, nullable=True)

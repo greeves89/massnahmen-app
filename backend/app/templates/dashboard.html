@@ -115,6 +115,9 @@
             {% if m.teilnahme_bestaetigt %}
               <span class="bg-blue-50 text-blue-700 px-2 py-0.5 rounded ml-1">Teilgenommen</span>
             {% endif %}
+            {% if m.anhang_pfad %}
+              <span title="Anhang vorhanden" class="ml-1">📎</span>
+            {% endif %}
           </td>
           <td class="px-4 py-3 text-center text-xl">
             {% set avg = m.bewertung_average %}

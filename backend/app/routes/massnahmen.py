@@ -1,7 +1,12 @@
+import os
+import re
+import shutil
+import uuid
 from datetime import date, datetime
+from pathlib import Path
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,6 +15,16 @@ from ..database import get_session
 from ..deps import get_current_user
 from ..models import Massnahme, User
 from ..utils import SMILEY_MAP, current_schuljahr, schuljahr_for_date, smiley_label
+
+UPLOADS_ROOT = Path(os.environ.get("UPLOADS_DIR", "/data/uploads"))
+ALLOWED_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png", ".eml", ".msg", ".heic"}
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
+
+
+def _sanitize_filename(name: str) -> str:
+    name = os.path.basename(name)
+    name = re.sub(r"[^A-Za-z0-9._-]+", "_", name).strip("._-")
+    return name or "anhang"
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -206,9 +221,104 @@ async def loeschen(
     session: AsyncSession = Depends(get_session),
 ):
     massnahme = await _get_owned(session, massnahme_id, user)
+    if massnahme.anhang_pfad:
+        _delete_attachment_file(massnahme.anhang_pfad)
     await session.delete(massnahme)
     await session.commit()
     return RedirectResponse(url="/?deleted=1", status_code=303)
+
+
+@router.post("/massnahmen/{massnahme_id}/anhang")
+async def upload_anhang(
+    massnahme_id: int,
+    request: Request,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+    file: UploadFile = File(...),
+):
+    massnahme = await _get_owned(session, massnahme_id, user)
+
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Keine Datei ausgewählt")
+    ext = Path(file.filename).suffix.lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Dateityp nicht erlaubt. Erlaubt: {', '.join(sorted(ALLOWED_EXTENSIONS))}",
+        )
+
+    safe_name = _sanitize_filename(file.filename)
+    target_dir = UPLOADS_ROOT / str(user.id) / str(massnahme.id)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    unique = uuid.uuid4().hex[:8]
+    target_path = target_dir / f"{unique}_{safe_name}"
+
+    written = 0
+    with target_path.open("wb") as out:
+        while chunk := await file.read(64 * 1024):
+            written += len(chunk)
+            if written > MAX_UPLOAD_BYTES:
+                out.close()
+                target_path.unlink(missing_ok=True)
+                raise HTTPException(status_code=413, detail="Datei zu groß (max 10 MB)")
+            out.write(chunk)
+
+    if massnahme.anhang_pfad:
+        _delete_attachment_file(massnahme.anhang_pfad)
+
+    massnahme.anhang_pfad = str(target_path)
+    massnahme.anhang_dateiname = safe_name
+    massnahme.anhang_mimetype = file.content_type or "application/octet-stream"
+    massnahme.anhang_groesse = written
+    await session.commit()
+    return RedirectResponse(url=f"/massnahmen/{massnahme.id}?saved=1", status_code=303)
+
+
+@router.get("/massnahmen/{massnahme_id}/anhang")
+async def download_anhang(
+    massnahme_id: int,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    massnahme = await _get_owned(session, massnahme_id, user)
+    if not massnahme.anhang_pfad or not os.path.exists(massnahme.anhang_pfad):
+        raise HTTPException(status_code=404, detail="Kein Anhang vorhanden")
+    return FileResponse(
+        path=massnahme.anhang_pfad,
+        filename=massnahme.anhang_dateiname or "anhang",
+        media_type=massnahme.anhang_mimetype or "application/octet-stream",
+    )
+
+
+@router.post("/massnahmen/{massnahme_id}/anhang/loeschen")
+async def delete_anhang(
+    massnahme_id: int,
+    request: Request,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    massnahme = await _get_owned(session, massnahme_id, user)
+    if massnahme.anhang_pfad:
+        _delete_attachment_file(massnahme.anhang_pfad)
+    massnahme.anhang_pfad = None
+    massnahme.anhang_dateiname = None
+    massnahme.anhang_mimetype = None
+    massnahme.anhang_groesse = None
+    await session.commit()
+    return RedirectResponse(url=f"/massnahmen/{massnahme.id}?saved=1", status_code=303)
+
+
+def _delete_attachment_file(path: str) -> None:
+    try:
+        p = Path(path)
+        if p.exists():
+            p.unlink()
+            try:
+                p.parent.rmdir()
+            except OSError:
+                pass
+    except Exception:
+        pass
 
 
 async def _get_owned(session: AsyncSession, massnahme_id: int, user: User) -> Massnahme:

@@ -21,6 +21,20 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
 
 async def init_db() -> None:
     from . import models  # noqa: F401
+    from sqlalchemy import text
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+        # Lightweight migration: add new columns to massnahmen if they don't exist (SQLite-safe).
+        result = await conn.execute(text("PRAGMA table_info(massnahmen)"))
+        existing_cols = {row[1] for row in result.fetchall()}
+        new_cols = {
+            "anhang_dateiname": "TEXT",
+            "anhang_pfad": "TEXT",
+            "anhang_mimetype": "TEXT",
+            "anhang_groesse": "INTEGER",
+        }
+        for col, col_type in new_cols.items():
+            if col not in existing_cols:
+                await conn.execute(text(f"ALTER TABLE massnahmen ADD COLUMN {col} {col_type}"))
